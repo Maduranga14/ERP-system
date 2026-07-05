@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    @apply font-sans bg-slate-100 text-gray-800 antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400;
+  }
+}
+
+@layer components {
+  /* === CARD === */
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-gray-100;
+  }
+
+  /* === NAV ITEM === */
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer;
+    @apply text-slate-300 hover:bg-white/10 hover:text-white;
+  }
+  .nav-item.active {
+    @apply bg-gold-500/20 text-gold-400;
+  }
+
+  /* === STAT BADGE COLORS === */
+  .badge-green  { @apply bg-green-100  text-green-700; }
+  .badge-red    { @apply bg-red-100    text-red-700; }
+  .badge-amber  { @apply bg-amber-100  text-amber-700; }
+  .badge-blue   { @apply bg-blue-100   text-blue-700; }
+  .badge-navy   { @apply bg-navy-900   text-white; }
+  .badge-gold   { @apply bg-gold-100   text-gold-700; }
+  .badge-gray   { @apply bg-gray-100   text-gray-600; }
+  .badge-purple { @apply bg-purple-100 text-purple-700; }
+}
+
+@layer utilities {
+  .text-gold { color: #B8943F; }
+  .bg-gold   { background-color: #B8943F; }
+  .border-gold { border-color: #B8943F; }
+}
