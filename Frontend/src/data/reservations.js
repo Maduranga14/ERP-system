@@ -1,0 +1,142 @@
+export const RESERVATIONS = [
+  {
+    id: 'RES-29401',
+    bookedDate: '12 Oct',
+    guest: {
+      name: 'Alexander Sterling',
+      email: 'alex.s@luxury.com',
+      phone: '+1 555-0123',
+      nationalId: 'ID-982741',
+    },
+    room: { number: '402', type: 'Royal Penthouse', guests: 2 },
+    checkIn:  '18 Oct 2026',
+    checkOut: '24 Oct 2026',
+    nights: 6,
+    status: 'Confirmed',
+    payment: 'Paid',
+    roomCharges: 4500,
+    additionalServices: 250,
+    tax: 570,
+    discount: 450,
+    discountCode: 'PROMO10',
+    total: 4870,
+    specialRequests: 'High floor, sea view preferred.',
+    timeline: [
+      { event: 'Created',     desc: 'Reservation initiated via online booking portal.', date: '12 Oct, 10:24 AM', done: true  },
+      { event: 'Confirmed',   desc: 'Payment verified and room allocation locked.',       date: '12 Oct, 11:15 AM', done: true  },
+      { event: 'Checked In',  desc: 'Expected arrival: 18 Oct.',                          date: 'Pending',          done: false },
+      { event: 'Checked Out', desc: 'Scheduled departure: 24 Oct.',                       date: 'Pending',          done: false },
+    ],
+  },
+  {
+    id: 'RES-29388',
+    bookedDate: '11 Oct',
+    guest: {
+      name: 'Margot Chen',
+      email: 'margot@example.com',
+      phone: '+1 (555) 0123',
+      nationalId: 'ID-773210',
+    },
+    room: { number: '112', type: 'Deluxe King Garden', guests: 1 },
+    checkIn:  '20 Oct 2026',
+    checkOut: '21 Oct 2026',
+    nights: 1,
+    status: 'Checked In',
+    payment: 'Partial',
+    roomCharges: 450,
+    additionalServices: 0,
+    tax: 54,
+    discount: 0,
+    discountCode: '',
+    total: 504,
+    specialRequests: '',
+    timeline: [
+      { event: 'Created',    desc: 'Walk-in reservation created.',   date: '11 Oct, 2:00 PM', done: true  },
+      { event: 'Confirmed',  desc: 'Partial payment received.',       date: '11 Oct, 2:15 PM', done: true  },
+      { event: 'Checked In', desc: 'Guest arrived and checked in.',  date: '20 Oct, 3:00 PM', done: true  },
+      { event: 'Checked Out',desc: 'Scheduled departure: 21 Oct.',   date: 'Pending',          done: false },
+    ],
+  },
+  {
+    id: 'RES-29375',
+    bookedDate: '10 Oct',
+    guest: {
+      name: 'Julian Moreno',
+      email: 'j.moreno@corp.com',
+      phone: '+34 600 123 456',
+      nationalId: 'ID-445988',
+    },
+    room: { number: '305', type: 'Executive Studio', guests: 2 },
+    checkIn:  '15 Oct 2026',
+    checkOut: '17 Oct 2026',
+    nights: 2,
+    status: 'Pending',
+    payment: 'Pending',
+    roomCharges: 800,
+    additionalServices: 100,
+    tax: 108,
+    discount: 0,
+    discountCode: '',
+    total: 1008,
+    specialRequests: 'Late check-in requested after 10 PM.',
+    timeline: [
+      { event: 'Created',    desc: 'Reservation made via website.',  date: '10 Oct, 9:00 AM', done: true  },
+      { event: 'Confirmed',  desc: 'Awaiting payment confirmation.', date: 'Pending',          done: false },
+      { event: 'Checked In', desc: 'Expected arrival: 15 Oct.',      date: 'Pending',          done: false },
+      { event: 'Checked Out',desc: 'Scheduled departure: 17 Oct.',   date: 'Pending',          done: false },
+    ],
+  },
+  {
+    id: 'RES-29362',
+    bookedDate: '09 Oct',
+    guest: {
+      name: 'Elena Kostic',
+      email: 'elena.k@mail.com',
+      phone: '+381 64 22...',
+      nationalId: 'ID-229103',
+    },
+    room: { number: '201', type: 'Superior Queen', guests: 1 },
+    checkIn:  '05 Oct 2026',
+    checkOut: '10 Oct 2026',
+    nights: 5,
+    status: 'Checked Out',
+    payment: 'Refunded',
+    roomCharges: 1750,
+    additionalServices: 0,
+    tax: 210,
+    discount: 0,
+    discountCode: '',
+    total: 1960,
+    specialRequests: '',
+    timeline: [
+      { event: 'Created',    desc: 'Online reservation.',           date: '09 Oct, 8:00 AM',  done: true },
+      { event: 'Confirmed',  desc: 'Full payment received.',        date: '09 Oct, 8:30 AM',  done: true },
+      { event: 'Checked In', desc: 'Guest checked in.',             date: '05 Oct, 2:00 PM',  done: true },
+      { event: 'Checked Out',desc: 'Guest checked out. Refunded.',  date: '10 Oct, 11:00 AM', done: true },
+    ],
+  },
+];
+
+export const ROOM_TYPES = [
+  { id: 1, name: 'Deluxe Sea View',  desc: 'King bed, 45m², Balcony', rate: 450 },
+  { id: 2, name: 'Premium Garden',   desc: 'Queen bed, 40m²',          rate: 380 },
+  { id: 3, name: 'Grand Suite',      desc: '2 Bedrooms, Lounge',       rate: 750 },
+];
+
+export const AVAILABLE_ROOMS = [
+  { value: '402', label: 'Room 402 (Ready)' },
+  { value: '205', label: 'Room 205 (Ready)' },
+  { value: '310', label: 'Room 310 (Ready)' },
+  { value: '118', label: 'Room 118 (Ready)' },
+];
+
+export const PAYMENT_METHODS = [
+  'Credit Card (Pre-auth)',
+  'Cash',
+  'Bank Transfer',
+  'Online Payment',
+];
+
+export const STATUS_OPTIONS   = ['All', 'Confirmed', 'Pending', 'Checked In', 'Checked Out', 'Cancelled'];
+export const ROOM_TYPE_OPTIONS = ['All', 'Deluxe', 'Superior', 'Executive', 'Suite', 'Penthouse'];
+export const PAYMENT_OPTIONS   = ['All', 'Paid', 'Partial', 'Pending', 'Refunded'];
