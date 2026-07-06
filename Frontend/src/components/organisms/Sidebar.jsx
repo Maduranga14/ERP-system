@@ -24,9 +24,9 @@ const navConfigs = {
     { label: 'Customers',      icon: <Users className="w-4 h-4" />,            path: '/admin/customers' },
     { label: 'Employees',      icon: <UserCog className="w-4 h-4" />,          path: '/admin/employees' },
     { label: 'Housekeeping',   icon: <Sparkles className="w-4 h-4" />,         path: '/admin/housekeeping' },
+    { label: 'Maintenance',    icon: <Wrench className="w-4 h-4" />,            path: '/admin/maintenance' },
+    { label: 'Cleaning History',icon: <History className="w-4 h-4" />,           path: '/admin/cleaning-history' },
     { label: 'Billing',        icon: <Receipt className="w-4 h-4" />,          path: '/admin/billing' },
-    { label: 'Reports',        icon: <BarChart3 className="w-4 h-4" />,        path: '/admin/reports' },
-    { label: 'User Management',icon: <UserCog className="w-4 h-4" />,          path: '/admin/users' },
     { label: 'Settings',       icon: <Settings className="w-4 h-4" />,         path: '/admin/settings' },
   ],
   manager: [
@@ -36,8 +36,9 @@ const navConfigs = {
     { label: 'Customers',    icon: <Users className="w-4 h-4" />,            path: '/manager/customers' },
     { label: 'Employees',    icon: <UserCog className="w-4 h-4" />,          path: '/manager/employees' },
     { label: 'Housekeeping', icon: <Sparkles className="w-4 h-4" />,         path: '/manager/housekeeping' },
+    { label: 'Maintenance',  icon: <Wrench className="w-4 h-4" />,            path: '/manager/maintenance' },
+    { label: 'Cleaning History', icon: <History className="w-4 h-4" />,       path: '/manager/cleaning-history' },
     { label: 'Billing',      icon: <Receipt className="w-4 h-4" />,          path: '/manager/billing' },
-    { label: 'Reports',      icon: <BarChart3 className="w-4 h-4" />,        path: '/manager/reports' },
   ],
   receptionist: [
     { label: 'Dashboard',        icon: <LayoutDashboard className="w-4 h-4" />, path: '/receptionist' },
