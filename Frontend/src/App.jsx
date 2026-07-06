@@ -36,6 +36,19 @@ import BillingList      from './pages/billing/BillingList';
 import InvoiceDetail    from './pages/billing/InvoiceDetail';
 import GenerateInvoice  from './pages/billing/GenerateInvoice';
 
+// Employee module
+import EmployeeList   from './pages/employees/EmployeeList';
+import EmployeeDetail from './pages/employees/EmployeeDetail';
+import AddEmployee    from './pages/employees/AddEmployee';
+
+// Check-In / Check-Out module
+import CheckInPage  from './pages/checkin/CheckInPage';
+import CheckOutPage from './pages/checkout/CheckOutPage';
+
+// Maintenance & Cleaning History
+import MaintenancePage    from './pages/maintenance/MaintenancePage';
+import CleaningHistoryPage from './pages/cleaning/CleaningHistoryPage';
+
 const App = () => (
   <BrowserRouter>
     <Routes>
@@ -60,6 +73,13 @@ const App = () => (
       <Route path="/admin/billing"                  element={<BillingList />} />
       <Route path="/admin/billing/generate"         element={<GenerateInvoice />} />
       <Route path="/admin/billing/:id"              element={<InvoiceDetail />} />
+      <Route path="/admin/employees"                element={<EmployeeList />} />
+      <Route path="/admin/employees/new"            element={<AddEmployee />} />
+      <Route path="/admin/employees/:id"            element={<EmployeeDetail />} />
+      <Route path="/admin/check-in"                 element={<CheckInPage />} />
+      <Route path="/admin/check-out"                element={<CheckOutPage />} />
+      <Route path="/admin/maintenance"              element={<MaintenancePage />} />
+      <Route path="/admin/cleaning-history"         element={<CleaningHistoryPage />} />
 
       {/* ── Manager (view rooms + history, no add/edit/delete) ── */}
       <Route path="/manager"                        element={<ManagerDashboard />} />
@@ -72,6 +92,10 @@ const App = () => (
       <Route path="/manager/housekeeping"           element={<HousekeepingList />} />
       <Route path="/manager/housekeeping/assign"    element={<AssignTask />} />
       <Route path="/manager/housekeeping/:id"       element={<TaskDetail />} />
+      <Route path="/manager/employees"              element={<EmployeeList />} />
+      <Route path="/manager/employees/:id"          element={<EmployeeDetail />} />
+      <Route path="/manager/maintenance"            element={<MaintenancePage />} />
+      <Route path="/manager/cleaning-history"       element={<CleaningHistoryPage />} />
       <Route path="/manager/billing"                element={<BillingList />} />
       <Route path="/manager/billing/:id"            element={<InvoiceDetail />} />
 
@@ -92,6 +116,8 @@ const App = () => (
       <Route path="/receptionist/billing"           element={<BillingList />} />
       <Route path="/receptionist/billing/generate"  element={<GenerateInvoice />} />
       <Route path="/receptionist/billing/:id"       element={<InvoiceDetail />} />
+      <Route path="/receptionist/check-in"          element={<CheckInPage />} />
+      <Route path="/receptionist/check-out"         element={<CheckOutPage />} />
 
       {/* ── Housekeeper (view rooms + cleaning status only) ── */}
       <Route path="/housekeeper"                    element={<HousekeeperDashboard />} />
@@ -99,6 +125,8 @@ const App = () => (
       <Route path="/housekeeper/rooms/:id"          element={<RoomDetail />} />
       <Route path="/housekeeper/housekeeping"       element={<HousekeepingList />} />
       <Route path="/housekeeper/housekeeping/:id"   element={<TaskDetail />} />
+      <Route path="/housekeeper/maintenance"        element={<MaintenancePage />} />
+      <Route path="/housekeeper/history"            element={<CleaningHistoryPage />} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
