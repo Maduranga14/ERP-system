@@ -6,48 +6,90 @@ import InputField from '../components/atoms/InputField';
 import Checkbox from '../components/atoms/Checkbox';
 import Button from '../components/atoms/Button';
 
-const DEMO_USERS = [
-  { email: 'admin@hotelgrande.com',        password: 'admin123',    role: 'admin',        path: '/admin',        label: 'Admin' },
-  { email: 'manager@hotelgrande.com',      password: 'manager123',  role: 'manager',      path: '/manager',      label: 'Manager' },
-  { email: 'receptionist@hotelgrande.com', password: 'front123',    role: 'receptionist', path: '/receptionist', label: 'Receptionist' },
-  { email: 'housekeeper@hotelgrande.com',  password: 'house123',    role: 'housekeeper',  path: '/housekeeper',  label: 'Housekeeper' },
-];
+/**
+ * LoginPage — authenticates users against the Spring Boot backend.
+ *
+ * Flow:
+ *  1. User submits email + password via the form.
+ *  2. POST /api/auth/login → { token, role, redirectUrl, fullName, email }
+ *  3. JWT is stored in localStorage under the key "jwtToken".
+ *  4. User info is stored in localStorage under "userInfo" for dashboard use.
+ *  5. React Router navigates to the role-specific dashboard path.
+ *
+ * Error handling:
+ *  - 401: display "Invalid email or password."
+ *  - Network/server error: display a connectivity message.
+ *  - Validation error (400): display the server's message.
+ */
+
+/** Base URL of the Spring Boot API. Adjust port if you changed server.port. */
+const API_BASE_URL = 'http://localhost:8080';
 
 const LoginPage = () => {
   const navigate = useNavigate();
-  const [email, setEmail]         = useState('');
-  const [password, setPassword]   = useState('');
-  const [remember, setRemember]   = useState(false);
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState('');
 
+  // ── Form State ──────────────────────────────────────────────────────────────
+  const [email,    setEmail]    = useState('');
+  const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(false);
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState('');
+
+  // ── Form Submit Handler ─────────────────────────────────────────────────────
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
 
-    const user = DEMO_USERS.find(
-      (u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password
-    );
+    try {
+      // ── Step 1: Call the backend login endpoint ─────────────────────────────
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email, password }),
+      });
 
-    if (user) {
-      navigate(user.path);
-    } else {
-      setError('Invalid email or password. Check the demo credentials below.');
+      const data = await response.json();
+
+      // ── Step 2: Handle non-2xx responses ───────────────────────────────────
+      if (!response.ok) {
+        // Server returned 401 or 400 with a { message: "..." } body
+        setError(data.message || 'Invalid email or password.');
+        return;
+      }
+
+      // ── Step 3: Persist the JWT and user info in localStorage ──────────────
+      // The JWT is sent as "Authorization: Bearer <token>" on subsequent
+      // API calls (rooms, reservations, billing, etc.).
+      localStorage.setItem('jwtToken', data.token);
+      localStorage.setItem('userInfo', JSON.stringify({
+        fullName:    data.fullName,
+        email:       data.email,
+        role:        data.role,
+        redirectUrl: data.redirectUrl,
+        rememberMe:  remember,
+      }));
+
+      // ── Step 4: Navigate to the role-based dashboard ────────────────────────
+      // data.redirectUrl is one of: /admin, /manager, /receptionist, /housekeeper
+      navigate(data.redirectUrl);
+
+    } catch (networkError) {
+      // Handles cases where fetch itself throws (e.g., backend is down)
+      console.error('Login network error:', networkError);
+      setError('Cannot connect to the server. Please ensure the backend is running.');
+    } finally {
+      // Always stop the loading spinner, whether success or failure
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  const quickLogin = (user) => {
-    setEmail(user.email);
-    setPassword(user.password);
-  };
-
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <AuthLayout>
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-sm">
-        {/* Logo */}
+
+        {/* ── Logo ── */}
         <div className="flex flex-col items-center mb-7">
           <div className="w-16 h-16 rounded-full bg-navy-900 flex items-center justify-center mb-3 shadow-lg">
             <Hotel className="w-8 h-8 text-gold-400" />
@@ -58,7 +100,7 @@ const LoginPage = () => {
           </p>
         </div>
 
-        {/* Heading */}
+        {/* ── Heading ── */}
         <div className="mb-6">
           <h2 className="text-2xl font-bold text-gray-900">Welcome Back</h2>
           <p className="text-sm text-gray-500 mt-1">
@@ -66,7 +108,7 @@ const LoginPage = () => {
           </p>
         </div>
 
-        {/* Form */}
+        {/* ── Login Form ── */}
         <form onSubmit={handleLogin} className="flex flex-col gap-4">
           <InputField
             id="email"
@@ -117,28 +159,8 @@ const LoginPage = () => {
           </Button>
         </form>
 
-        <div className="my-5 border-t border-gray-100" />
-
-        {/* Demo quick-login chips */}
-        <div>
-          <p className="text-[11px] text-gray-400 text-center mb-3 uppercase tracking-wider font-medium">
-            Demo Quick Login
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            {DEMO_USERS.map((u) => (
-              <button
-                key={u.role}
-                type="button"
-                onClick={() => quickLogin(u)}
-                className="text-xs font-medium text-navy-800 border border-gray-200 rounded-lg py-1.5 px-2 hover:border-gold-400 hover:text-gold-700 hover:bg-gold-50 transition-all duration-150"
-              >
-                {u.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-5 text-center">
+        {/* ── Footer Help Link ── */}
+        <div className="mt-6 text-center">
           <p className="text-xs text-gray-400">
             Need help?{' '}
             <a href="#" className="text-gold-600 font-medium hover:underline">
@@ -146,6 +168,7 @@ const LoginPage = () => {
             </a>
           </p>
         </div>
+
       </div>
     </AuthLayout>
   );
