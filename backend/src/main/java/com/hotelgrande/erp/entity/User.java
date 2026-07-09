@@ -1,6 +1,7 @@
 package com.hotelgrande.erp.entity;
 
 import com.hotelgrande.erp.enums.Role;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -17,10 +18,10 @@ import java.util.List;
 
 @Entity
 @Table(name = "users")
-@Data                   // Lombok: generates getters, setters, toString, equals, hashCode
-@Builder                // Lombok: builder pattern for easy object creation
-@NoArgsConstructor      // Lombok: required by JPA
-@AllArgsConstructor     // Lombok: required by @Builder
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class User implements UserDetails {
 
 
@@ -39,6 +40,7 @@ public class User implements UserDetails {
     private String email;
 
 
+    @JsonIgnore
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
 
@@ -67,36 +69,42 @@ public class User implements UserDetails {
 
 
     @Override
+    @JsonIgnore
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
     }
 
 
     @Override
+    @JsonIgnore
     public String getPassword() {
         return passwordHash;
     }
 
 
     @Override
+    @JsonIgnore
     public String getUsername() {
         return email;
     }
 
 
     @Override
+    @JsonIgnore
     public boolean isAccountNonExpired() {
         return true;
     }
 
 
     @Override
+    @JsonIgnore
     public boolean isAccountNonLocked() {
         return true;
     }
 
 
     @Override
+    @JsonIgnore
     public boolean isCredentialsNonExpired() {
         return true;
     }

@@ -1,21 +1,18 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Search, Wrench, AlertTriangle, CheckCircle2,
   Clock, Plus, X, Eye, ChevronLeft, ChevronRight,
   RefreshCw, Filter, BedDouble, User, Calendar,
-  FileText, ArrowLeft, Upload, AlertCircle,
+  FileText, ArrowLeft, Upload, AlertCircle, Loader2,
 } from 'lucide-react';
 
 import DashboardLayout from '../../components/templates/DashboardLayout';
 import Badge           from '../../components/atoms/Badge';
 import { useRole }     from '../../hooks/useRole';
-import {
-  MAINTENANCE_REQUESTS, MAINTENANCE_STATS,
-  ISSUE_CATEGORIES, MR_STATUSES, MR_PRIORITIES,
-  TECHNICIANS,
-} from '../../data/maintenance';
+import { ISSUE_CATEGORIES, MR_STATUSES, MR_PRIORITIES } from '../../data/maintenance';
+import { getMaintenanceRequests, createMaintenance } from '../../utils/api';
 
-/* ── Helpers ───────────────────────────────────────────────── */
+
 const USER_NAMES = {
   admin: 'Admin User', manager: 'Alex Sterling',
   receptionist: 'Sarah Mitchell', housekeeper: 'Sarah Jenkins',
@@ -37,7 +34,7 @@ const PRIORITY_CONFIG = {
 const ITEMS_PER_PAGE = 6;
 const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-50 transition-all placeholder-gray-300 bg-white";
 
-/* ── Stat Card ─────────────────────────────────────────────── */
+
 const StatCard = ({ icon, iconBg, label, value, valueColor = 'text-gray-900', badge, badgeCls }) => (
   <div className="card p-4 flex flex-col gap-1.5 hover:shadow-md transition-shadow">
     <div className="flex items-start justify-between">
@@ -53,7 +50,7 @@ const StatCard = ({ icon, iconBg, label, value, valueColor = 'text-gray-900', ba
   </div>
 );
 
-/* ── Priority Badge ────────────────────────────────────────── */
+
 const PriorityBadge = ({ priority }) => {
   const cfg = PRIORITY_CONFIG[priority] || PRIORITY_CONFIG.Low;
   return (
@@ -64,7 +61,7 @@ const PriorityBadge = ({ priority }) => {
   );
 };
 
-/* ── Filter Select ─────────────────────────────────────────── */
+
 const FilterSelect = ({ label, value, onChange, options }) => (
   <div className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 bg-white hover:border-gray-300 transition-colors">
     <span className="text-xs text-gray-500 font-medium">{label}</span>
@@ -78,18 +75,20 @@ const FilterSelect = ({ label, value, onChange, options }) => (
   </div>
 );
 
-/* ── Detail Panel ──────────────────────────────────────────── */
-const DetailPanel = ({ req, onClose }) => (
+
+const DetailPanel = ({ req, onClose }) => {
+  const reqId = `MR-${String(req.id).padStart(3, '0')}`;
+  return (
   <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/30 backdrop-blur-sm"
     onClick={onClose}>
     <div
       className="h-full w-full max-w-md bg-white shadow-2xl overflow-y-auto"
       onClick={(e) => e.stopPropagation()}
     >
-      {/* Header */}
+     
       <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 flex items-center justify-between z-10">
         <div>
-          <p className="text-xs text-gray-400 font-medium">{req.id}</p>
+          <p className="text-xs text-gray-400 font-medium">{reqId}</p>
           <h3 className="text-base font-bold text-gray-900">{req.category}</h3>
         </div>
         <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500">
@@ -98,20 +97,20 @@ const DetailPanel = ({ req, onClose }) => (
       </div>
 
       <div className="p-5 space-y-5">
-        {/* Status + Priority row */}
+       
         <div className="flex items-center gap-2">
           <Badge variant={STATUS_VARIANT[req.status] || 'gray'} dot>{req.status}</Badge>
           <PriorityBadge priority={req.priority} />
         </div>
 
-        {/* Room Info */}
+        
         <div className="bg-slate-50 rounded-xl p-4">
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Room Information</p>
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: 'Room Number', value: `Room ${req.room}` },
-              { label: 'Room Type',   value: req.roomType },
-              { label: 'Floor',       value: req.floor },
+              { label: 'Room Number', value: `Room ${req.room?.number || ''}` },
+              { label: 'Room Type',   value: req.room?.type || '' },
+              { label: 'Floor',       value: req.room?.floor ? `Floor ${req.room.floor}` : '' },
               { label: 'Category',    value: req.category },
             ].map((r) => (
               <div key={r.label}>
@@ -122,19 +121,19 @@ const DetailPanel = ({ req, onClose }) => (
           </div>
         </div>
 
-        {/* Description */}
+       
         <div>
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Description</p>
           <p className="text-sm text-gray-700 leading-relaxed bg-gray-50 rounded-xl p-3">{req.description}</p>
         </div>
 
-        {/* Meta */}
+       
         <div className="grid grid-cols-2 gap-3">
           {[
             { label: 'Reported By',   value: req.reportedBy },
             { label: 'Date Reported', value: req.reportedDate },
             { label: 'Time',          value: req.reportedTime },
-            { label: 'Assigned To',   value: req.assignedTo },
+            { label: 'Assigned To',   value: req.assignedTo || 'Unassigned' },
           ].map((r) => (
             <div key={r.label}>
               <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">{r.label}</p>
@@ -143,7 +142,7 @@ const DetailPanel = ({ req, onClose }) => (
           ))}
         </div>
 
-        {/* Resolution Notes */}
+        
         {req.resolutionNotes && (
           <div className="bg-green-50 border border-green-100 rounded-xl p-4">
             <p className="text-[10px] font-bold text-green-700 uppercase tracking-wider mb-2">Resolution Notes</p>
@@ -154,7 +153,7 @@ const DetailPanel = ({ req, onClose }) => (
           </div>
         )}
 
-        {/* Current status banner */}
+      
         {req.status !== 'Resolved' && req.status !== 'Closed' && (
           <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
@@ -167,9 +166,10 @@ const DetailPanel = ({ req, onClose }) => (
       </div>
     </div>
   </div>
-);
+  );
+};
 
-/* ── Report New Issue Modal ────────────────────────────────── */
+
 const ReportIssueModal = ({ onClose, onSubmit }) => {
   const [form, setForm] = useState({
     room: '', category: ISSUE_CATEGORIES[0], priority: 'Medium', description: '',
@@ -215,7 +215,7 @@ const ReportIssueModal = ({ onClose, onSubmit }) => {
             </div>
           </div>
 
-          {/* Priority */}
+        
           <div>
             <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">
               Priority <span className="text-red-500">*</span>
@@ -240,7 +240,7 @@ const ReportIssueModal = ({ onClose, onSubmit }) => {
             </div>
           </div>
 
-          {/* Description */}
+         
           <div>
             <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">
               Description <span className="text-red-500">*</span>
@@ -254,7 +254,7 @@ const ReportIssueModal = ({ onClose, onSubmit }) => {
             />
           </div>
 
-          {/* Upload photo */}
+          
           <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 flex flex-col items-center gap-1.5 hover:border-gray-300 transition-colors cursor-pointer text-center">
             <Upload className="w-5 h-5 text-gray-400" />
             <p className="text-xs font-medium text-gray-500">Upload Photo <span className="text-gray-400 font-normal">(optional)</span></p>
@@ -290,6 +290,9 @@ const ReportIssueModal = ({ onClose, onSubmit }) => {
 const MaintenancePage = () => {
   const role = useRole();
 
+  const [requests,       setRequests]       = useState([]);
+  const [loading,        setLoading]        = useState(true);
+  const [error,          setError]          = useState('');
   const [search,         setSearch]         = useState('');
   const [statusFilter,   setStatusFilter]   = useState('All');
   const [priorityFilter, setPriorityFilter] = useState('All');
@@ -298,20 +301,76 @@ const MaintenancePage = () => {
   const [showForm,       setShowForm]       = useState(false);
   const [submitted,      setSubmitted]      = useState(false);
 
+  useEffect(() => {
+    fetchRequests();
+  }, []);
+
+  const fetchRequests = () => {
+    getMaintenanceRequests()
+      .then(data => setRequests(data))
+      .catch(() => setError('Failed to load maintenance requests.'))
+      .finally(() => setLoading(false));
+  };
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    return MAINTENANCE_REQUESTS.filter((r) => {
-      if (q && !(r.id.toLowerCase().includes(q) || r.room.includes(q) || r.category.toLowerCase().includes(q))) return false;
+    return requests.filter((r) => {
+      const roomNum = r.room?.number || '';
+      const reqId = `MR-${String(r.id).padStart(3, '0')}`;
+      if (q && !(reqId.toLowerCase().includes(q) || roomNum.includes(q) || r.category?.toLowerCase().includes(q))) return false;
       if (statusFilter   !== 'All' && r.status   !== statusFilter)   return false;
       if (priorityFilter !== 'All' && r.priority !== priorityFilter) return false;
       return true;
     });
-  }, [search, statusFilter, priorityFilter]);
+  }, [requests, search, statusFilter, priorityFilter]);
+
+  const MAINTENANCE_STATS = {
+    open: requests.filter(r => r.status === 'Open').length,
+    inProgress: requests.filter(r => r.status === 'In Progress').length,
+    resolved: requests.filter(r => r.status === 'Resolved' || r.status === 'Closed').length,
+    highPriority: requests.filter(r => r.priority === 'High' && r.status !== 'Resolved' && r.status !== 'Closed').length,
+  };
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginated  = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   const resetFilters = () => { setSearch(''); setStatusFilter('All'); setPriorityFilter('All'); setCurrentPage(1); };
+
+  const handleReportIssue = async (form) => {
+    setLoading(true);
+    try {
+      await createMaintenance({
+        room: { number: form.room },
+        category: form.category,
+        priority: form.priority,
+        description: form.description,
+        reportedBy: USER_NAMES[role] || 'Staff',
+        reportedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        reportedTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      });
+      setSubmitted(true);
+      setShowForm(false);
+      fetchRequests();
+    } catch (e) {
+      alert('Failed to report issue: ' + e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) return (
+    <DashboardLayout role={role} userName={USER_NAMES[role]} userRole={USER_ROLES[role]}>
+      <div className="flex items-center justify-center h-64 gap-3 text-gray-400">
+        <Loader2 className="w-6 h-6 animate-spin" /> Loading requests...
+      </div>
+    </DashboardLayout>
+  );
+
+  if (error) return (
+    <DashboardLayout role={role} userName={USER_NAMES[role]} userRole={USER_ROLES[role]}>
+      <div className="flex items-center justify-center h-64 text-red-500 text-sm">{error}</div>
+    </DashboardLayout>
+  );
 
   return (
     <DashboardLayout
@@ -321,12 +380,12 @@ const MaintenancePage = () => {
       notificationCount={3}
       searchPlaceholder="Search rooms or issues..."
     >
-      {/* Breadcrumb */}
+      
       <p className="text-xs text-gray-400 mb-1">
         Dashboard &rsaquo; <span className="text-gray-600 font-medium">Maintenance Requests</span>
       </p>
 
-      {/* Header */}
+      
       <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Maintenance Requests</h1>
@@ -342,7 +401,7 @@ const MaintenancePage = () => {
         </button>
       </div>
 
-      {/* Success banner */}
+      
       {submitted && (
         <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-4 text-sm text-green-700 font-medium">
           <CheckCircle2 className="w-4 h-4" />
@@ -353,7 +412,7 @@ const MaintenancePage = () => {
         </div>
       )}
 
-      {/* KPI Cards */}
+      
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
         <StatCard icon={<Wrench className="w-4 h-4 text-orange-600" />}    iconBg="bg-orange-100" label="Open Requests"  value={MAINTENANCE_STATS.open}        valueColor="text-orange-700" badge="Pending" badgeCls="bg-orange-100 text-orange-700" />
         <StatCard icon={<Clock className="w-4 h-4 text-blue-600" />}       iconBg="bg-blue-100"   label="In Progress"    value={MAINTENANCE_STATS.inProgress}   valueColor="text-blue-700"   badge="Active"  badgeCls="bg-blue-100 text-blue-700" />
@@ -361,7 +420,7 @@ const MaintenancePage = () => {
         <StatCard icon={<AlertTriangle className="w-4 h-4 text-red-500" />}  iconBg="bg-red-100"  label="High Priority"  value={MAINTENANCE_STATS.highPriority} valueColor="text-red-600"   badge="Urgent" badgeCls="bg-red-100 text-red-700" />
       </div>
 
-      {/* Search + Filters */}
+      
       <div className="card p-3 mb-4 flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 bg-white flex-1 min-w-[220px] focus-within:border-orange-400 transition-colors">
           <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
@@ -402,19 +461,21 @@ const MaintenancePage = () => {
                   No maintenance requests match your filters.
                 </td>
               </tr>
-            ) : paginated.map((req) => (
+            ) : paginated.map((req) => {
+              const reqId = `MR-${String(req.id).padStart(3, '0')}`;
+              return (
               <tr
                 key={req.id}
                 className="border-b border-gray-50 hover:bg-slate-50/70 transition-colors cursor-pointer"
                 onClick={() => setSelectedReq(req)}
               >
                 <td className="px-4 py-3 align-middle">
-                  <span className="font-bold text-orange-700 text-sm">{req.id}</span>
+                  <span className="font-bold text-orange-700 text-sm">{reqId}</span>
                 </td>
                 <td className="px-4 py-3 align-middle">
                   <div className="flex items-center gap-2">
-                    <span className="w-9 h-9 rounded-xl bg-navy-900 text-white text-sm font-bold flex items-center justify-center">{req.room}</span>
-                    <span className="text-[11px] text-gray-400">{req.floor}</span>
+                    <span className="w-9 h-9 rounded-xl bg-navy-900 text-white text-sm font-bold flex items-center justify-center">{req.room?.number || '?'}</span>
+                    <span className="text-[11px] text-gray-400">{req.room?.floor ? `Floor ${req.room.floor}` : ''}</span>
                   </div>
                 </td>
                 <td className="px-4 py-3 align-middle">
@@ -442,11 +503,12 @@ const MaintenancePage = () => {
                   </button>
                 </td>
               </tr>
-            ))}
+            );
+            })}
           </tbody>
         </table>
 
-        {/* Pagination */}
+        
         <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
           <p className="text-xs text-gray-400">
             Showing <span className="font-semibold text-gray-700">{paginated.length}</span> of{' '}
@@ -480,18 +542,14 @@ const MaintenancePage = () => {
         </div>
       </div>
 
-      {/* Detail Slide Panel */}
+      
       {selectedReq && <DetailPanel req={selectedReq} onClose={() => setSelectedReq(null)} />}
 
-      {/* Report Issue Modal */}
+      
       {showForm && (
         <ReportIssueModal
           onClose={() => setShowForm(false)}
-          onSubmit={(form) => {
-            alert(`Maintenance request submitted for Room ${form.room} — ${form.category} (mock).`);
-            setShowForm(false);
-            setSubmitted(true);
-          }}
+          onSubmit={handleReportIssue}
         />
       )}
     </DashboardLayout>

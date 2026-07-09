@@ -1,9 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Plus, Download, Filter, ChevronLeft, ChevronRight,
   Play, CheckCircle2, Eye, Pencil, AlertTriangle, Radio,
-  BedDouble, RefreshCw, Layers, Clock,
+  BedDouble, RefreshCw, Layers, Clock, Loader2,
 } from 'lucide-react';
 
 import DashboardLayout    from '../../components/templates/DashboardLayout';
@@ -11,12 +11,10 @@ import Badge              from '../../components/atoms/Badge';
 import Avatar             from '../../components/atoms/Avatar';
 import { useRole }        from '../../hooks/useRole';
 import { canHousekeeping } from '../../utils/permissions';
-import {
-  TASKS, HOUSEKEEPING_STATS,
-  PRIORITY_OPTIONS, STATUS_OPTIONS, FLOOR_OPTIONS,
-} from '../../data/housekeeping';
+import { PRIORITY_OPTIONS, STATUS_OPTIONS, FLOOR_OPTIONS } from '../../data/housekeeping';
+import { getHousekeepingTasks } from '../../utils/api';
 
-/* ── Variant maps ─────────────────────────────────────────── */
+
 const PRIORITY_VARIANT = { High: 'red', Medium: 'amber', Low: 'green' };
 const STATUS_VARIANT   = {
   Pending: 'amber', 'In Progress': 'blue',
@@ -34,7 +32,7 @@ const userRoles = {
   receptionist: 'Front Desk Lead', housekeeper: 'Senior Housekeeper',
 };
 
-/* ── Stat Card ─────────────────────────────────────────────── */
+
 const StatCard = ({ label, value, icon, iconBg, valueColor = 'text-gray-900', badge }) => (
   <div className="card p-4 flex flex-col gap-2 hover:shadow-md transition-shadow">
     <div className="flex items-center justify-between">
@@ -54,7 +52,7 @@ const StatCard = ({ label, value, icon, iconBg, valueColor = 'text-gray-900', ba
   </div>
 );
 
-/* ── Room Number Badge ─────────────────────────────────────── */
+
 const RoomBadge = ({ room, floor }) => (
   <div className="flex items-center gap-2">
     <span className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-navy-900 text-white text-sm font-bold flex-shrink-0">
@@ -64,7 +62,7 @@ const RoomBadge = ({ room, floor }) => (
   </div>
 );
 
-/* ── Filter Select ─────────────────────────────────────────── */
+
 const FilterSelect = ({ label, value, onChange, options }) => (
   <div className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 bg-white hover:border-gray-300 transition-colors">
     <span className="text-xs text-gray-500 font-medium">{label}</span>
@@ -78,7 +76,7 @@ const FilterSelect = ({ label, value, onChange, options }) => (
   </div>
 );
 
-/* ── Action Button ─────────────────────────────────────────── */
+
 const ActionBtn = ({ icon, title, onClick, color = 'text-gray-400 hover:text-navy-700' }) => (
   <button
     onClick={(e) => { e.stopPropagation(); onClick?.(); }}
@@ -89,12 +87,15 @@ const ActionBtn = ({ icon, title, onClick, color = 'text-gray-400 hover:text-nav
   </button>
 );
 
-/* ── Main Component ────────────────────────────────────────── */
+
 const HousekeepingList = () => {
   const navigate  = useNavigate();
   const role      = useRole();
   const basePath  = `/${role}`;
 
+  const [tasks,          setTasks]          = useState([]);
+  const [loading,        setLoading]        = useState(true);
+  const [error,          setError]          = useState('');
   const [search,         setSearch]         = useState('');
   const [statusFilter,   setStatusFilter]   = useState('All');
   const [priorityFilter, setPriorityFilter] = useState('All');
@@ -102,20 +103,53 @@ const HousekeepingList = () => {
   const [currentPage,    setCurrentPage]    = useState(1);
   const [showBroadcast,  setShowBroadcast]  = useState(false);
 
+  useEffect(() => {
+    getHousekeepingTasks()
+      .then(data => setTasks(data))
+      .catch(() => setError('Failed to load housekeeping tasks.'))
+      .finally(() => setLoading(false));
+  }, []);
+
   const filtered = useMemo(() => {
-    return TASKS.filter((t) => {
+    return tasks.filter((t) => {
       const q = search.toLowerCase();
+      const hkName = t.housekeeper?.fullName || 'Unassigned';
+      const rNum = t.room?.number || '';
+      const rType = t.room?.type || '';
       if (q && !(
-        t.room.includes(q) ||
-        t.assignedTo.name.toLowerCase().includes(q) ||
-        t.roomType.toLowerCase().includes(q)
+        rNum.includes(q) ||
+        hkName.toLowerCase().includes(q) ||
+        rType.toLowerCase().includes(q)
       )) return false;
       if (statusFilter   !== 'All' && t.status   !== statusFilter)   return false;
       if (priorityFilter !== 'All' && t.priority !== priorityFilter) return false;
-      if (floorFilter    !== 'All' && t.floor    !== floorFilter)    return false;
+      if (floorFilter    !== 'All' && t.room && `Floor ${t.room.floor}` !== floorFilter) return false;
       return true;
     });
-  }, [search, statusFilter, priorityFilter, floorFilter]);
+  }, [tasks, search, statusFilter, priorityFilter, floorFilter]);
+
+  const HOUSEKEEPING_STATS = {
+    roomsToClean: tasks.filter(t => t.status !== 'Completed').length,
+    inProgress: tasks.filter(t => t.status === 'In Progress').length,
+    cleanRooms: tasks.filter(t => t.status === 'Completed').length,
+    maintenance: tasks.filter(t => t.room?.status === 'Maintenance').length,
+    staffOnDuty: [...new Set(tasks.map(t => t.housekeeper?.id).filter(Boolean))].length || 1,
+    highPriority: tasks.filter(t => t.priority === 'High' && t.status !== 'Completed').length,
+  };
+
+  if (loading) return (
+    <DashboardLayout role={role} userName={userNames[role]} userRole={userRoles[role]}>
+      <div className="flex items-center justify-center h-64 gap-3 text-gray-400">
+        <Loader2 className="w-6 h-6 animate-spin" /> Loading tasks...
+      </div>
+    </DashboardLayout>
+  );
+
+  if (error) return (
+    <DashboardLayout role={role} userName={userNames[role]} userRole={userRoles[role]}>
+      <div className="flex items-center justify-center h-64 text-red-500 text-sm">{error}</div>
+    </DashboardLayout>
+  );
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginated  = filtered.slice(
@@ -134,7 +168,7 @@ const HousekeepingList = () => {
       notificationCount={4}
       searchPlaceholder="Search guest, room or booking ID..."
     >
-      {/* ── Header ── */}
+      
       <div className="flex items-start justify-between mb-5">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Housekeeping Management</h1>
@@ -159,7 +193,7 @@ const HousekeepingList = () => {
         </div>
       </div>
 
-      {/* ── Stat Cards ── */}
+     
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 mb-5">
         <StatCard
           label="Rooms to Clean"
@@ -206,7 +240,7 @@ const HousekeepingList = () => {
         />
       </div>
 
-      {/* ── Search + Filters ── */}
+     
       <div className="card p-3 mb-4 flex flex-wrap items-center gap-2">
         {/* Search */}
         <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 bg-white flex-1 min-w-[220px] focus-within:border-navy-400 transition-colors">
@@ -245,7 +279,7 @@ const HousekeepingList = () => {
         </button>
       </div>
 
-      {/* ── Task Table ── */}
+      
       <div className="card overflow-hidden mb-5">
         <table className="w-full text-sm">
           <thead>
@@ -275,25 +309,24 @@ const HousekeepingList = () => {
                   className="border-b border-gray-50 hover:bg-slate-50/70 transition-colors cursor-pointer"
                   onClick={() => navigate(`${basePath}/housekeeping/${task.id}`)}
                 >
-                  {/* Room */}
+                  
                   <td className="px-4 py-3 align-middle">
-                    <RoomBadge room={task.room} floor={task.floor} />
+                    <RoomBadge room={task.room?.number || '?'} floor={`Floor ${task.room?.floor || '?'}`} />
                   </td>
 
-                  {/* Room Type */}
+                 
                   <td className="px-4 py-3 align-middle">
-                    <span className="text-xs text-gray-700 font-medium">{task.roomType}</span>
+                    <span className="text-xs text-gray-700 font-medium">{task.room?.type}</span>
                   </td>
 
-                  {/* Assigned To */}
+                  
                   <td className="px-4 py-3 align-middle">
                     <div className="flex items-center gap-2">
-                      <Avatar name={task.assignedTo.name} size="sm" />
-                      <span className="text-xs font-medium text-gray-800">{task.assignedTo.name}</span>
+                      <Avatar name={task.housekeeper?.fullName || 'Unassigned'} size="sm" />
+                      <span className="text-xs font-medium text-gray-800">{task.housekeeper?.fullName || 'Unassigned'}</span>
                     </div>
                   </td>
 
-                  {/* Priority */}
                   <td className="px-4 py-3 align-middle">
                     <span className={[
                       'inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md',
@@ -306,14 +339,14 @@ const HousekeepingList = () => {
                     </span>
                   </td>
 
-                  {/* Status */}
+                  
                   <td className="px-4 py-3 align-middle">
                     <Badge variant={STATUS_VARIANT[task.status] || 'gray'} size="sm">
                       {task.status}
                     </Badge>
                   </td>
 
-                  {/* Due Time */}
+                  
                   <td className="px-4 py-3 align-middle">
                     <div className="flex items-center gap-1">
                       <Clock className={`w-3.5 h-3.5 ${overdue ? 'text-red-500' : 'text-gray-400'}`} />
@@ -323,7 +356,7 @@ const HousekeepingList = () => {
                     </div>
                   </td>
 
-                  {/* Actions */}
+                 
                   <td className="px-4 py-3 align-middle" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center gap-2">
                       {task.status === 'Pending' && canHousekeeping(role, 'updateStatus') && (
@@ -361,7 +394,7 @@ const HousekeepingList = () => {
           </tbody>
         </table>
 
-        {/* Pagination */}
+        
         <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
           <p className="text-xs text-gray-400">
             Showing <span className="font-semibold text-gray-700">{paginated.length}</span> of{' '}
@@ -400,7 +433,7 @@ const HousekeepingList = () => {
         </div>
       </div>
 
-      {/* ── Emergency Broadcast (Admin/Manager only) ── */}
+      
       {canHousekeeping(role, 'broadcastAlert') && (
         <div className="card p-5">
           <div className="flex items-start justify-between">
@@ -421,7 +454,7 @@ const HousekeepingList = () => {
         </div>
       )}
 
-      {/* ── Broadcast Modal ── */}
+     
       {showBroadcast && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4">

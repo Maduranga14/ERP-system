@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Eye, Printer, Search, Calendar, ChevronLeft, ChevronRight,
   Download, DollarSign, FileText, CheckCircle, Clock, CreditCard, RotateCcw,
-  SlidersHorizontal,
+  SlidersHorizontal, Loader2,
 } from 'lucide-react';
 
 import DashboardLayout  from '../../components/templates/DashboardLayout';
@@ -12,9 +12,10 @@ import Button           from '../../components/atoms/Button';
 import Avatar           from '../../components/atoms/Avatar';
 import { useRole }      from '../../hooks/useRole';
 import { canBilling }   from '../../utils/billingPermissions';
-import { INVOICES, STATUS_OPTIONS, METHOD_OPTIONS, BILLING_STATS } from '../../data/billing';
+import { STATUS_OPTIONS, METHOD_OPTIONS } from '../../data/billing';
+import { getInvoices }  from '../../utils/api';
 
-/* ─── Status → Badge variant map ─────────────────────────────────────────── */
+
 const STATUS_VARIANT = {
   Paid:     'green',
   Pending:  'amber',
@@ -23,11 +24,11 @@ const STATUS_VARIANT = {
   Overdue:  'red',
 };
 
-/* ─── User meta per role ──────────────────────────────────────────────────── */
+
 const USER_NAMES = { admin: 'Admin User', manager: 'Alex Sterling', receptionist: 'Sarah Mitchell' };
 const USER_ROLES = { admin: 'Super Administrator', manager: 'General Manager', receptionist: 'Front Desk Lead' };
 
-/* ─── Summary stat cards config ──────────────────────────────────────────── */
+
 const StatCard = ({ icon, iconBg, label, value, sub, subColor }) => (
   <div className="card p-4 flex flex-col gap-2">
     <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${iconBg}`}>
@@ -41,29 +42,66 @@ const StatCard = ({ icon, iconBg, label, value, sub, subColor }) => (
   </div>
 );
 
-/* ═══════════════════════════════════════════════════════════════════════════ */
+
 const BillingList = () => {
   const navigate = useNavigate();
   const role     = useRole();
 
+  const [invoices,      setInvoices]      = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState('');
   const [search,        setSearch]        = useState('');
   const [statusFilter,  setStatusFilter]  = useState('All Statuses');
   const [methodFilter,  setMethodFilter]  = useState('All Methods');
   const [dateRange,     setDateRange]     = useState('');
   const [currentPage,   setCurrentPage]   = useState(1);
 
+  useEffect(() => {
+    getInvoices()
+      .then(data => setInvoices(data))
+      .catch(() => setError('Failed to load invoices.'))
+      .finally(() => setLoading(false));
+  }, []);
+
   const basePath = role === 'admin' ? '/admin' : role === 'manager' ? '/manager' : '/receptionist';
 
-  /* ── Filtering ── */
-  const filtered = INVOICES.filter((inv) => {
+
+  const filtered = invoices.filter((inv) => {
     const q = search.toLowerCase();
-    if (q && !inv.id.toLowerCase().includes(q) &&
-        !inv.guest.name.toLowerCase().includes(q) &&
-        !inv.reservationId.toLowerCase().includes(q)) return false;
-    if (statusFilter !== 'All Statuses' && inv.status  !== statusFilter) return false;
-    if (methodFilter !== 'All Methods'  && inv.method  !== methodFilter)  return false;
+    const guestName = inv.guestName || '';
+    const reservationCode = inv.reservation ? `RES-${10000 + inv.reservation.id}` : '';
+    const invoiceCode = `INV-${String(inv.id).padStart(3,'0')}`;
+    if (q && !invoiceCode.toLowerCase().includes(q) &&
+        !guestName.toLowerCase().includes(q) &&
+        !reservationCode.toLowerCase().includes(q)) return false;
+    if (statusFilter !== 'All Statuses' && inv.status !== statusFilter) return false;
+    if (methodFilter !== 'All Methods'  && inv.method !== methodFilter)  return false;
     return true;
   });
+
+  const BILLING_STATS = {
+    todayRevenue:  `$${invoices.filter(i=>i.status==='Paid').reduce((s,i)=>s+(i.grandTotal||0),0).toLocaleString()}`,
+    revenueGrowth: '',
+    totalInvoices: invoices.length.toString(),
+    paidInvoices:  invoices.filter(i=>i.status==='Paid').length.toString(),
+    pendingAmount: `$${invoices.filter(i=>i.status==='Pending'||i.status==='Overdue').reduce((s,i)=>s+(i.grandTotal||0),0).toLocaleString()}`,
+    transactions:  invoices.reduce((s,i)=>s+(i.payments?.length||0),0).toString(),
+    refunds:       invoices.filter(i=>i.status==='Refunded').length.toString(),
+  };
+
+  if (loading) return (
+    <DashboardLayout role={role} userName={USER_NAMES[role]} userRole={USER_ROLES[role]}>
+      <div className="flex items-center justify-center h-64 gap-3 text-gray-400">
+        <Loader2 className="w-6 h-6 animate-spin" /> Loading invoices...
+      </div>
+    </DashboardLayout>
+  );
+
+  if (error) return (
+    <DashboardLayout role={role} userName={USER_NAMES[role]} userRole={USER_ROLES[role]}>
+      <div className="flex items-center justify-center h-64 text-red-500 text-sm">{error}</div>
+    </DashboardLayout>
+  );
 
   const ITEMS_PER_PAGE = 5;
   const totalPages     = Math.ceil(filtered.length / ITEMS_PER_PAGE);
@@ -79,7 +117,7 @@ const BillingList = () => {
       notificationCount={3}
       searchPlaceholder="Search for guest, room or booking ID..."
     >
-      {/* ── Page Header ── */}
+      
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Billing &amp; Payments</h1>
@@ -97,7 +135,7 @@ const BillingList = () => {
         )}
       </div>
 
-      {/* ── Stats Row ── */}
+      
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 mb-5">
         <StatCard
           icon={<DollarSign className="w-4 h-4 text-green-600" />}
@@ -139,10 +177,10 @@ const BillingList = () => {
         />
       </div>
 
-      {/* ── Filters ── */}
+     
       <div className="card p-4 mb-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-          {/* Search */}
+         
           <div className="relative">
             <label className="block text-xs font-semibold text-gray-500 mb-1">Search Records</label>
             <div className="relative">
@@ -157,7 +195,7 @@ const BillingList = () => {
             </div>
           </div>
 
-          {/* Status */}
+         
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Payment Status</label>
             <select
@@ -169,7 +207,7 @@ const BillingList = () => {
             </select>
           </div>
 
-          {/* Method */}
+          
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Payment Method</label>
             <select
@@ -183,7 +221,7 @@ const BillingList = () => {
         </div>
 
         <div className="flex items-end gap-3">
-          {/* Date Range */}
+          
           <div className="flex-1 max-w-xs">
             <label className="block text-xs font-semibold text-gray-500 mb-1">Date Range</label>
             <div className="relative">
@@ -215,7 +253,7 @@ const BillingList = () => {
         </div>
       </div>
 
-      {/* ── Invoice Table ── */}
+      
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
           <thead>
@@ -228,53 +266,56 @@ const BillingList = () => {
             </tr>
           </thead>
           <tbody>
-            {pageData.map((inv) => (
+            {pageData.map((inv) => {
+              const invoiceCode = `INV-${String(inv.id).padStart(3,'0')}`;
+              const reservationCode = inv.reservation ? `RES-${10000 + inv.reservation.id}` : '—';
+              return (
               <tr
                 key={inv.id}
                 className="border-b border-gray-50 hover:bg-amber-50/30 transition-colors cursor-pointer group"
                 onClick={() => navigate(`${basePath}/billing/${inv.id}`)}
               >
-                {/* Invoice ID */}
+                
                 <td className="px-4 py-3.5 align-middle">
-                  <span className="font-bold text-navy-900">{inv.id}</span>
+                  <span className="font-bold text-navy-900">{invoiceCode}</span>
                 </td>
 
-                {/* Guest */}
+               
                 <td className="px-4 py-3.5 align-middle">
                   <div className="flex items-center gap-2.5">
-                    <Avatar name={inv.guest.name} size="sm" />
-                    <span className="font-semibold text-gray-800 text-xs whitespace-nowrap">{inv.guest.name}</span>
+                    <Avatar name={inv.guestName || '?'} size="sm" />
+                    <span className="font-semibold text-gray-800 text-xs whitespace-nowrap">{inv.guestName}</span>
                   </div>
                 </td>
 
-                {/* Reservation */}
+               
                 <td className="px-4 py-3.5 align-middle">
-                  <span className="text-xs text-gray-600 font-medium">{inv.reservationId}</span>
+                  <span className="text-xs text-gray-600 font-medium">{reservationCode}</span>
                 </td>
 
-                {/* Amount */}
+                
                 <td className="px-4 py-3.5 align-middle">
                   <span className="font-bold text-gray-900">${inv.grandTotal.toFixed(2)}</span>
                 </td>
 
-                {/* Method */}
+                
                 <td className="px-4 py-3.5 align-middle">
                   <span className="text-xs text-gray-600">{inv.method}</span>
                 </td>
 
-                {/* Status */}
+               
                 <td className="px-4 py-3.5 align-middle">
                   <Badge variant={STATUS_VARIANT[inv.status] || 'gray'} size="sm">
                     {inv.status}
                   </Badge>
                 </td>
 
-                {/* Date */}
+               
                 <td className="px-4 py-3.5 align-middle">
                   <span className="text-xs text-gray-500 whitespace-nowrap">{inv.date}</span>
                 </td>
 
-                {/* Actions */}
+               
                 <td className="px-4 py-3.5 align-middle" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-2">
                     <button
@@ -296,7 +337,8 @@ const BillingList = () => {
                   </div>
                 </td>
               </tr>
-            ))}
+            );
+            })}
             {pageData.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-4 py-12 text-center text-sm text-gray-400">
@@ -307,7 +349,7 @@ const BillingList = () => {
           </tbody>
         </table>
 
-        {/* Pagination */}
+       
         <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
           <p className="text-xs text-gray-400">
             Showing {pageData.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1} to{' '}
