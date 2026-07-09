@@ -1,17 +1,14 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Search, CheckCircle2, Clock, Users, Sparkles,
   ChevronLeft, ChevronRight, X, Eye, Filter,
-  RefreshCw, BedDouble, Calendar, User, FileText,
+  RefreshCw, BedDouble, Calendar, User, FileText, Loader2,
 } from 'lucide-react';
 
 import DashboardLayout from '../../components/templates/DashboardLayout';
 import Badge           from '../../components/atoms/Badge';
 import { useRole }     from '../../hooks/useRole';
-import {
-  CLEANING_RECORDS, CLEANING_STATS,
-  STAFF_OPTIONS, DATE_OPTIONS,
-} from '../../data/maintenance';
+import { getHousekeepingTasks } from '../../utils/api';
 
 /* ── Helpers ───────────────────────────────────────────────── */
 const USER_NAMES = {
@@ -162,30 +159,96 @@ const DetailPanel = ({ record, onClose }) => {
 
 /* ══════════════════════════════════════════════════════════════
    MAIN COMPONENT
-══════════════════════════════════════════════════════════════ */
+   ══════════════════════════════════════════════════════════════ */
 const CleaningHistoryPage = () => {
   const role = useRole();
 
+  const [tasks,        setTasks]        = useState([]);
+  const [loading,      setLoading]      = useState(true);
   const [search,       setSearch]       = useState('');
   const [staffFilter,  setStaffFilter]  = useState('All Staff');
   const [dateFilter,   setDateFilter]   = useState('All Dates');
   const [currentPage,  setCurrentPage]  = useState(1);
   const [selectedRec,  setSelectedRec]  = useState(null);
 
+  const fetchTasks = () => {
+    getHousekeepingTasks()
+      .then(data => setTasks(data))
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchTasks();
+  }, []);
+
+  const cleaningRecords = useMemo(() => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    return tasks
+      .filter((t) => t.status === 'Completed')
+      .map((t) => {
+        let recDate = todayStr;
+        if (t.assignedTime && t.assignedTime.includes('-')) {
+          recDate = t.assignedTime.split(' ')[0];
+        }
+        return {
+          id: `CLN-${String(t.id).padStart(4, '0')}`,
+          room: t.room?.number || '?',
+          roomType: t.room?.type || 'Standard',
+          floor: t.room?.floor !== undefined ? `Floor ${t.room.floor}` : '?',
+          staff: t.housekeeper?.fullName || 'Unassigned',
+          date: recDate,
+          startTime: t.assignedTime || '09:00 AM',
+          endTime: t.dueTime || '10:00 AM',
+          duration: '45 mins',
+          checklist: t.checklist || [],
+          notes: t.notes || '',
+        };
+      });
+  }, [tasks]);
+
+  const stats = useMemo(() => {
+    const cleanedToday = cleaningRecords.length;
+    const completedTotal = cleaningRecords.length;
+    const avgDuration = '45 mins';
+    const myCompleted = cleaningRecords.filter(r => r.staff === USER_NAMES[role]).length;
+    return { cleanedToday, completedTotal, avgDuration, myCompleted };
+  }, [cleaningRecords, role]);
+
+  const staffOptions = useMemo(() => {
+    const s = new Set(cleaningRecords.map(r => r.staff));
+    return ['All Staff', ...s];
+  }, [cleaningRecords]);
+
+  const dateOptions = useMemo(() => {
+    const d = new Set(cleaningRecords.map(r => r.date));
+    return ['All Dates', ...d];
+  }, [cleaningRecords]);
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    return CLEANING_RECORDS.filter((r) => {
+    return cleaningRecords.filter((r) => {
       if (q && !(r.room.includes(q) || r.staff.toLowerCase().includes(q) || r.roomType.toLowerCase().includes(q))) return false;
       if (staffFilter !== 'All Staff' && r.staff !== staffFilter) return false;
       if (dateFilter  !== 'All Dates' && r.date  !== dateFilter)  return false;
       return true;
     });
-  }, [search, staffFilter, dateFilter]);
+  }, [cleaningRecords, search, staffFilter, dateFilter]);
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginated  = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   const resetFilters = () => { setSearch(''); setStaffFilter('All Staff'); setDateFilter('All Dates'); setCurrentPage(1); };
+
+  if (loading) {
+    return (
+      <DashboardLayout role={role} userName={USER_NAMES[role]} userRole={USER_ROLES[role]}>
+        <div className="flex items-center justify-center h-64 gap-3 text-gray-400">
+          <Loader2 className="w-6 h-6 animate-spin" /> Loading cleaning history...
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout
@@ -208,7 +271,7 @@ const CleaningHistoryPage = () => {
         </div>
         <div className="flex items-center gap-2 text-xs text-gray-500 bg-green-50 border border-green-100 px-3 py-1.5 rounded-lg">
           <Sparkles className="w-3.5 h-3.5 text-green-500" />
-          Today: <span className="font-semibold text-green-700 ml-1">{CLEANING_STATS.cleanedToday} rooms cleaned</span>
+          Today: <span className="font-semibold text-green-700 ml-1">{stats.cleanedToday} rooms cleaned</span>
         </div>
       </div>
 
@@ -218,7 +281,7 @@ const CleaningHistoryPage = () => {
           icon={<BedDouble className="w-4 h-4 text-teal-600" />}
           iconBg="bg-teal-100"
           label="Rooms Cleaned Today"
-          value={CLEANING_STATS.cleanedToday}
+          value={stats.cleanedToday}
           valueColor="text-teal-700"
           sub="↑ 2 from yesterday"
         />
@@ -226,21 +289,21 @@ const CleaningHistoryPage = () => {
           icon={<CheckCircle2 className="w-4 h-4 text-green-600" />}
           iconBg="bg-green-100"
           label="Completed Tasks"
-          value={CLEANING_STATS.completedTotal}
+          value={stats.completedTotal}
           valueColor="text-green-700"
         />
         <StatCard
           icon={<Clock className="w-4 h-4 text-blue-600" />}
           iconBg="bg-blue-100"
           label="Avg Cleaning Time"
-          value={CLEANING_STATS.avgDuration}
+          value={stats.avgDuration}
           valueColor="text-blue-700"
         />
         <StatCard
           icon={<Users className="w-4 h-4 text-purple-600" />}
           iconBg="bg-purple-100"
           label="My Completed Tasks"
-          value={role === 'housekeeper' ? CLEANING_STATS.myCompleted : '—'}
+          value={role === 'housekeeper' ? stats.myCompleted : '—'}
           valueColor="text-purple-700"
           sub={role === 'housekeeper' ? 'Today' : 'Housekeeper view only'}
         />
@@ -263,13 +326,13 @@ const CleaningHistoryPage = () => {
           label="Date: "
           value={dateFilter}
           onChange={(v) => { setDateFilter(v); setCurrentPage(1); }}
-          options={DATE_OPTIONS}
+          options={dateOptions}
         />
         <FilterSelect
           label="Staff: "
           value={staffFilter}
           onChange={(v) => { setStaffFilter(v); setCurrentPage(1); }}
-          options={STAFF_OPTIONS}
+          options={staffOptions}
         />
         <button
           onClick={resetFilters}

@@ -55,6 +55,7 @@ export const getRooms       = ()       => apiGet('/api/rooms');
 export const getRoomById    = (id)     => apiGet(`/api/rooms/${id}`);
 export const createRoom     = (room)   => apiPost('/api/rooms', room);
 export const updateRoom     = (id, r)  => apiPut(`/api/rooms/${id}`, r);
+export const updateRoomStatus = (id, status) => apiPut(`/api/rooms/${id}/status?status=${encodeURIComponent(status)}`, {});
 export const deleteRoom     = (id)     => apiDelete(`/api/rooms/${id}`);
 
 

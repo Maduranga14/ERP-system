@@ -1,9 +1,13 @@
 package com.hotelgrande.erp.controller;
 
 import com.hotelgrande.erp.entity.MaintenanceRequest;
+import com.hotelgrande.erp.entity.User;
+import com.hotelgrande.erp.enums.Role;
 import com.hotelgrande.erp.repository.MaintenanceRequestRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,19 +22,29 @@ public class MaintenanceController {
     private final com.hotelgrande.erp.repository.RoomRepository roomRepository;
 
     @GetMapping
-    public ResponseEntity<List<MaintenanceRequest>> getAllRequests() {
+    public ResponseEntity<?> getAllRequests(@AuthenticationPrincipal User currentUser) {
+        if (currentUser.getRole() == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied.");
+        }
         return ResponseEntity.ok(maintenanceRequestRepository.findAll());
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<MaintenanceRequest> getRequestById(@PathVariable Long id) {
+    public ResponseEntity<?> getRequestById(@PathVariable Long id, @AuthenticationPrincipal User currentUser) {
+        if (currentUser.getRole() == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied.");
+        }
         return maintenanceRequestRepository.findById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping
-    public ResponseEntity<MaintenanceRequest> createRequest(@RequestBody MaintenanceRequest request) {
+    public ResponseEntity<?> createRequest(@RequestBody MaintenanceRequest request, @AuthenticationPrincipal User currentUser) {
+        // Receptionists cannot report maintenance (receptionist: ❌ for Report Maintenance)
+        if (currentUser.getRole() == Role.RECEPTIONIST) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Receptionists cannot report maintenance issues.");
+        }
         if (request.getStatus() == null) request.setStatus("Open");
         if (request.getPriority() == null) request.setPriority("Medium");
         if (request.getRoom() != null && request.getRoom().getNumber() != null) {
@@ -41,7 +55,14 @@ public class MaintenanceController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<MaintenanceRequest> updateRequest(@PathVariable Long id, @RequestBody MaintenanceRequest details) {
+    public ResponseEntity<?> updateRequest(
+            @PathVariable Long id,
+            @RequestBody MaintenanceRequest details,
+            @AuthenticationPrincipal User currentUser) {
+        // Receptionists cannot edit maintenance
+        if (currentUser.getRole() == Role.RECEPTIONIST) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied.");
+        }
         return maintenanceRequestRepository.findById(id)
                 .map(request -> {
                     request.setRoom(details.getRoom());
@@ -61,7 +82,13 @@ public class MaintenanceController {
     }
 
     @PutMapping("/{id}/status")
-    public ResponseEntity<MaintenanceRequest> updateStatus(@PathVariable Long id, @RequestParam String status) {
+    public ResponseEntity<?> updateStatus(
+            @PathVariable Long id,
+            @RequestParam String status,
+            @AuthenticationPrincipal User currentUser) {
+        if (currentUser.getRole() == Role.RECEPTIONIST) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied.");
+        }
         return maintenanceRequestRepository.findById(id)
                 .map(request -> {
                     request.setStatus(status);
@@ -71,7 +98,10 @@ public class MaintenanceController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteRequest(@PathVariable Long id) {
+    public ResponseEntity<?> deleteRequest(@PathVariable Long id, @AuthenticationPrincipal User currentUser) {
+        if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.MANAGER) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied.");
+        }
         return maintenanceRequestRepository.findById(id)
                 .map(request -> {
                     maintenanceRequestRepository.delete(request);

@@ -1,9 +1,13 @@
 package com.hotelgrande.erp.controller;
 
 import com.hotelgrande.erp.entity.Room;
+import com.hotelgrande.erp.entity.User;
+import com.hotelgrande.erp.enums.Role;
 import com.hotelgrande.erp.repository.RoomRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -29,7 +33,10 @@ public class RoomController {
     }
 
     @PostMapping
-    public ResponseEntity<?> createRoom(@RequestBody Room room) {
+    public ResponseEntity<?> createRoom(@RequestBody Room room, @AuthenticationPrincipal User currentUser) {
+        if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.MANAGER) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only administrators and managers can create rooms.");
+        }
         if (roomRepository.findByNumber(room.getNumber()).isPresent()) {
             return ResponseEntity.badRequest().body("Room number " + room.getNumber() + " already exists.");
         }
@@ -40,7 +47,13 @@ public class RoomController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Room> updateRoom(@PathVariable Long id, @RequestBody Room roomDetails) {
+    public ResponseEntity<?> updateRoom(
+            @PathVariable Long id,
+            @RequestBody Room roomDetails,
+            @AuthenticationPrincipal User currentUser) {
+        if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.MANAGER) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only administrators and managers can edit rooms.");
+        }
         return roomRepository.findById(id)
                 .map(room -> {
                     room.setNumber(roomDetails.getNumber());
@@ -63,12 +76,31 @@ public class RoomController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @PutMapping("/{id}/status")
+    public ResponseEntity<?> updateStatus(
+            @PathVariable Long id,
+            @RequestParam String status,
+            @AuthenticationPrincipal User currentUser) {
+        if (currentUser.getRole() == Role.RECEPTIONIST) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Receptionists cannot change room status directly.");
+        }
+        return roomRepository.findById(id)
+                .map(room -> {
+                    room.setStatus(status);
+                    return ResponseEntity.ok(roomRepository.save(room));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteRoom(@PathVariable Long id) {
+    public ResponseEntity<?> deleteRoom(@PathVariable Long id, @AuthenticationPrincipal User currentUser) {
+        if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.MANAGER) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only administrators and managers can delete rooms.");
+        }
         return roomRepository.findById(id)
                 .map(room -> {
                     roomRepository.delete(room);
-                    return ResponseEntity.ok().<Void>build();
+                    return ResponseEntity.ok().build();
                 })
                 .orElse(ResponseEntity.notFound().build());
     }

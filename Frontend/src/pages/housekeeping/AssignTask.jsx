@@ -1,17 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, BedDouble, User, Clock, AlignLeft,
-  Save, X, CheckSquare, AlertTriangle,
+  Save, X, CheckSquare, AlertTriangle, Loader2
 } from 'lucide-react';
 
 import DashboardLayout     from '../../components/templates/DashboardLayout';
 import Avatar              from '../../components/atoms/Avatar';
 import { useRole }         from '../../hooks/useRole';
 import { canHousekeeping } from '../../utils/permissions';
-import { STAFF }           from '../../data/housekeeping';
+import { getRooms, getEmployees, createHousekeepingTask } from '../../utils/api';
 
-/* ── Helpers ────────────────────────────────────────────────── */
+
 const userNames = {
   admin: 'Admin User', manager: 'Alex Sterling',
   receptionist: 'Sarah Mitchell', housekeeper: 'Sarah Jenkins',
@@ -33,7 +33,7 @@ const DEFAULT_CHECKLIST = [
 
 const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-navy-500 focus:ring-2 focus:ring-navy-100 transition-all bg-white";
 
-/* ── Form Field ─────────────────────────────────────────────── */
+
 const FormField = ({ label, icon, required, children }) => (
   <div>
     <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">
@@ -45,7 +45,7 @@ const FormField = ({ label, icon, required, children }) => (
   </div>
 );
 
-/* ── Main Component ──────────────────────────────────────────── */
+
 const AssignTask = () => {
   const navigate = useNavigate();
   const role     = useRole();
@@ -63,11 +63,14 @@ const AssignTask = () => {
     );
   }
 
+  const [rooms,   setRooms]   = useState([]);
+  const [staff,   setStaff]   = useState([]);
+  const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
     room:       '',
     roomType:   'Standard',
     floor:      'Floor 1',
-    staffId:    STAFF[0].id,
+    staffId:    '',
     priority:   'High',
     dueTime:    '',
     notes:      '',
@@ -75,6 +78,23 @@ const AssignTask = () => {
   });
   const [errors,  setErrors]  = useState({});
   const [saving,  setSaving]  = useState(false);
+
+  useEffect(() => {
+    Promise.all([getRooms(), getEmployees()])
+      .then(([roomsData, employeesData]) => {
+        setRooms(roomsData);
+        const housekeepers = employeesData.filter(e => e.systemRole === 'housekeeper');
+        setStaff(housekeepers);
+        if (housekeepers.length > 0) {
+          setForm(f => ({ ...f, staffId: String(housekeepers[0].id) }));
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        setErrors({ general: 'Failed to load rooms or staff details.' });
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   const set = (field, value) => {
     setForm((f) => ({ ...f, [field]: value }));
@@ -100,21 +120,56 @@ const AssignTask = () => {
   const handleSave = async () => {
     const e = validate();
     if (Object.keys(e).length > 0) { setErrors(e); return; }
+
+    const roomObj = rooms.find(r => r.number === form.room);
+    const housekeeperObj = staff.find(s => s.id === Number(form.staffId));
+
+    if (!roomObj) {
+      setErrors({ room: 'Selected room not found.' });
+      return;
+    }
+
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 800));
-    setSaving(false);
-    const staff = STAFF.find((s) => s.id === form.staffId);
-    alert(`Task assigned to ${staff?.name} for Room ${form.room}! (mock)`);
-    navigate(`${basePath}/housekeeping`);
+    try {
+      const payload = {
+        room: roomObj,
+        housekeeper: housekeeperObj || null,
+        priority: form.priority,
+        status: 'Pending',
+        dueTime: form.dueTime,
+        assignedTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        notes: form.notes,
+        checklist: form.checklist.map(label => ({ label, done: false }))
+      };
+
+      await createHousekeepingTask(payload);
+      alert(`Task successfully assigned to ${housekeeperObj?.fullName || 'staff'} for Room ${form.room}!`);
+      navigate(`${basePath}/housekeeping`);
+    } catch (err) {
+      console.error(err);
+      alert(`Failed to save task: ${err.message || err}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const selectedStaff = STAFF.find((s) => s.id === form.staffId);
+  const selectedStaff = staff.find((s) => s.id === Number(form.staffId));
 
   const PRIORITY_STYLES = {
     High:   { dot: 'bg-red-500',    border: 'border-red-300',    bg: 'bg-red-50',    text: 'text-red-700'   },
     Medium: { dot: 'bg-amber-500',  border: 'border-amber-300',  bg: 'bg-amber-50',  text: 'text-amber-700' },
     Low:    { dot: 'bg-green-500',  border: 'border-green-300',  bg: 'bg-green-50',  text: 'text-green-700' },
   };
+
+  if (loading) {
+    return (
+      <DashboardLayout role={role} userName={userNames[role]} userRole={userRoles[role]}>
+        <div className="flex items-center justify-center h-64 gap-3 text-gray-400">
+          <Loader2 className="w-6 h-6 animate-spin" /> Loading rooms and staff list...
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout
@@ -124,7 +179,7 @@ const AssignTask = () => {
       notificationCount={4}
       searchPlaceholder="Search guest, room or booking ID..."
     >
-      {/* Header */}
+      
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
           <button
@@ -158,10 +213,10 @@ const AssignTask = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-        {/* ── Left 2/3: Task Details ── */}
+        
         <div className="lg:col-span-2 flex flex-col gap-4">
 
-          {/* Room Details */}
+          
           <div className="card p-5">
             <div className="flex items-center gap-2 mb-4">
               <BedDouble className="w-4 h-4 text-gray-500" />
@@ -171,28 +226,33 @@ const AssignTask = () => {
               <FormField label="Room Number" required icon={<BedDouble className="w-3 h-3" />}>
                 <select
                   value={form.room}
-                  onChange={(e) => set('room', e.target.value)}
+                  onChange={(e) => {
+                    const r = rooms.find(room => room.number === e.target.value);
+                    setForm(f => ({
+                      ...f,
+                      room: e.target.value,
+                      roomType: r ? r.type : 'Standard',
+                      floor: r ? `Floor ${r.floor}` : 'Floor 1'
+                    }));
+                    if (errors.room) setErrors(e => ({ ...e, room: '' }));
+                  }}
                   className={`${inputCls} ${errors.room ? 'border-red-400' : ''}`}
                 >
                   <option value="">Select room…</option>
-                  {ROOMS.map((r) => <option key={r}>{r}</option>)}
+                  {rooms.map((r) => <option key={r.id} value={r.number}>{r.number}</option>)}
                 </select>
                 {errors.room && <p className="text-red-500 text-xs mt-1">{errors.room}</p>}
               </FormField>
               <FormField label="Room Type">
-                <select value={form.roomType} onChange={(e) => set('roomType', e.target.value)} className={inputCls}>
-                  {ROOM_TYPES.map((t) => <option key={t}>{t}</option>)}
-                </select>
+                <input value={form.roomType} disabled className={`${inputCls} bg-gray-50 text-gray-500`} />
               </FormField>
               <FormField label="Floor">
-                <select value={form.floor} onChange={(e) => set('floor', e.target.value)} className={inputCls}>
-                  {FLOORS.map((f) => <option key={f}>{f}</option>)}
-                </select>
+                <input value={form.floor} disabled className={`${inputCls} bg-gray-50 text-gray-500`} />
               </FormField>
             </div>
           </div>
 
-          {/* Staff Assignment */}
+          
           <div className="card p-5">
             <div className="flex items-center gap-2 mb-4">
               <User className="w-4 h-4 text-gray-500" />
@@ -205,8 +265,9 @@ const AssignTask = () => {
                   onChange={(e) => set('staffId', e.target.value)}
                   className={inputCls}
                 >
-                  {STAFF.filter((s) => s.status === 'On Duty').map((s) => (
-                    <option key={s.id} value={s.id}>{s.name} — {s.tasksAssigned} tasks</option>
+                  <option value="">Select staff…</option>
+                  {staff.map((s) => (
+                    <option key={s.id} value={s.id}>{s.fullName}</option>
                   ))}
                 </select>
               </FormField>
@@ -221,26 +282,26 @@ const AssignTask = () => {
               </FormField>
             </div>
 
-            {/* Selected Staff Preview */}
+            
             {selectedStaff && (
               <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-3 border border-slate-100">
-                <Avatar name={selectedStaff.name} size="md" />
+                <Avatar name={selectedStaff.fullName} size="md" />
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-800">{selectedStaff.name}</p>
-                  <p className="text-xs text-gray-400">{selectedStaff.role}</p>
+                  <p className="text-sm font-semibold text-gray-800">{selectedStaff.fullName}</p>
+                  <p className="text-xs text-gray-400">{selectedStaff.role || 'Housekeeper'}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-gray-400">Current Tasks</p>
-                  <p className="text-sm font-bold text-gray-800">{selectedStaff.tasksAssigned}</p>
+                  <p className="text-xs text-gray-400">Department</p>
+                  <p className="text-sm font-bold text-gray-800">{selectedStaff.department || 'Housekeeping'}</p>
                 </div>
-                <span className="text-xs font-semibold px-2 py-0.5 bg-green-100 text-green-700 rounded-full">
-                  {selectedStaff.status}
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${selectedStaff.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+                  {selectedStaff.enabled ? 'On Duty' : 'Off Duty'}
                 </span>
               </div>
             )}
           </div>
 
-          {/* Notes */}
+          
           <div className="card p-5">
             <div className="flex items-center gap-2 mb-3">
               <AlignLeft className="w-4 h-4 text-gray-500" />
@@ -256,10 +317,10 @@ const AssignTask = () => {
           </div>
         </div>
 
-        {/* ── Right 1/3: Priority + Checklist ── */}
+        
         <div className="flex flex-col gap-4">
 
-          {/* Priority Selector */}
+          
           <div className="card p-5">
             <div className="flex items-center gap-2 mb-4">
               <AlertTriangle className="w-4 h-4 text-gray-500" />
@@ -291,7 +352,7 @@ const AssignTask = () => {
             </div>
           </div>
 
-          {/* Cleaning Checklist */}
+          
           <div className="card p-5">
             <div className="flex items-center gap-2 mb-4">
               <CheckSquare className="w-4 h-4 text-gray-500" />
