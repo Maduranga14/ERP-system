@@ -98,7 +98,7 @@ const EditCustomer = () => {
     const e = {};
     if (!form.firstName.trim()) e.firstName = 'First name is required';
     if (!form.lastName.trim())  e.lastName  = 'Last name is required';
-    if (!form.email.trim() || !/\S+@\S+\.\S+/.test(form.email)) e.email = 'Valid email required';
+    if (form.email.trim() && !/\S+@\S+\.\S+/.test(form.email)) e.email = 'Valid email required';
     if (!form.phone.trim())     e.phone     = 'Phone number is required';
     return e;
   };
@@ -192,7 +192,7 @@ const EditCustomer = () => {
               </FormField>
             </div>
             <div className="grid grid-cols-2 gap-4 mb-4">
-              <FormField label="Email Address" required icon={<Mail className="w-3 h-3" />}>
+              <FormField label="Email Address" icon={<Mail className="w-3 h-3" />}>
                 <input
                   type="email"
                   value={form.email}

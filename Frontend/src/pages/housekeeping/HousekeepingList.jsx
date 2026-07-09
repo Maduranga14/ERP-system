@@ -12,7 +12,7 @@ import Avatar             from '../../components/atoms/Avatar';
 import { useRole }        from '../../hooks/useRole';
 import { canHousekeeping } from '../../utils/permissions';
 import { PRIORITY_OPTIONS, STATUS_OPTIONS, FLOOR_OPTIONS } from '../../data/housekeeping';
-import { getHousekeepingTasks } from '../../utils/api';
+import { getHousekeepingTasks, updateTaskStatus } from '../../utils/api';
 
 
 const PRIORITY_VARIANT = { High: 'red', Medium: 'amber', Low: 'green' };
@@ -103,12 +103,26 @@ const HousekeepingList = () => {
   const [currentPage,    setCurrentPage]    = useState(1);
   const [showBroadcast,  setShowBroadcast]  = useState(false);
 
-  useEffect(() => {
+  const fetchTasks = () => {
     getHousekeepingTasks()
       .then(data => setTasks(data))
       .catch(() => setError('Failed to load housekeeping tasks.'))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchTasks();
   }, []);
+
+  const handleStatusChange = async (taskId, newStatus) => {
+    try {
+      await updateTaskStatus(taskId, newStatus);
+      fetchTasks();
+    } catch (err) {
+      console.error(err);
+      alert(`Failed to update status: ${err.message || err}`);
+    }
+  };
 
   const filtered = useMemo(() => {
     return tasks.filter((t) => {
@@ -242,7 +256,7 @@ const HousekeepingList = () => {
 
      
       <div className="card p-3 mb-4 flex flex-wrap items-center gap-2">
-        {/* Search */}
+        
         <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 bg-white flex-1 min-w-[220px] focus-within:border-navy-400 transition-colors">
           <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
           <input
@@ -363,6 +377,7 @@ const HousekeepingList = () => {
                         <ActionBtn
                           icon={<Play className="w-4 h-4" />}
                           title="Start Cleaning"
+                          onClick={() => handleStatusChange(task.id, 'In Progress')}
                           color="text-gray-400 hover:text-blue-600"
                         />
                       )}
@@ -370,6 +385,7 @@ const HousekeepingList = () => {
                         <ActionBtn
                           icon={<CheckCircle2 className="w-4 h-4" />}
                           title="Mark as Complete"
+                          onClick={() => handleStatusChange(task.id, 'Completed')}
                           color="text-gray-400 hover:text-green-600"
                         />
                       )}
@@ -398,7 +414,7 @@ const HousekeepingList = () => {
         <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
           <p className="text-xs text-gray-400">
             Showing <span className="font-semibold text-gray-700">{paginated.length}</span> of{' '}
-            <span className="font-semibold text-gray-700">65</span> tasks
+            <span className="font-semibold text-gray-700">{filtered.length}</span> tasks
           </p>
           <div className="flex items-center gap-1">
             <button

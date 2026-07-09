@@ -59,7 +59,7 @@ export const canCustomer = (role, action) =>
  */
 export const HOUSEKEEPING_PERMISSIONS = {
   viewTasks:         ['admin', 'receptionist', 'manager', 'housekeeper'],
-  assignTasks:       ['admin', 'manager', 'receptionist'],
+  assignTasks:       ['admin', 'manager', 'housekeeper', 'receptionist'],
   updateStatus:      ['admin', 'manager', 'housekeeper'],
   reportMaintenance: ['admin', 'manager', 'housekeeper'],
   viewHistory:       ['admin', 'manager', 'housekeeper'],

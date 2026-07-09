@@ -7,7 +7,7 @@ import {
 
 import DashboardLayout from '../../components/templates/DashboardLayout';
 import { useRole }     from '../../hooks/useRole';
-import { getRooms, apiPost } from '../../utils/api';
+import { getRooms, apiPost, getCustomers } from '../../utils/api';
 
 /* ── Helpers ───────────────────────────────────────── */
 const userNames = { admin: 'Admin User', manager: 'Alex Sterling', receptionist: 'Sarah Mitchell' };
@@ -129,8 +129,8 @@ const NewReservation = () => {
   /* ── Submit ──────────────────────────────────── */
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!guestName || !email || !phone) {
-      setSubmitError('Please enter guest name, email, and phone number.');
+    if (!guestName || !phone) {
+      setSubmitError('Please enter guest name and phone number.');
       return;
     }
     if (!selectedRoomId) {
@@ -145,18 +145,30 @@ const NewReservation = () => {
     setSubmitting(true);
     setSubmitError('');
     try {
-      // 1. Create customer on the fly
-      const today = new Date().toISOString().split('T')[0];
-      const customer = await apiPost('/api/customers', {
-        name:       guestName,
-        email,
-        phone,
-        nationalId,
-        status:     'Active',
-        memberTier: 'Regular',
-        country:    '',
-        joinedDate: today,
-      });
+      // 1. Check if guest already exists by email or phone
+      const customers = await getCustomers();
+      let customer = null;
+      if (email) {
+        customer = customers.find(c => c.email === email);
+      }
+      if (!customer && phone) {
+        customer = customers.find(c => c.phone === phone);
+      }
+
+      // If guest does not exist, create on the fly
+      if (!customer) {
+        const today = new Date().toISOString().split('T')[0];
+        customer = await apiPost('/api/customers', {
+          name:       guestName,
+          email:      email || null,
+          phone,
+          nationalId,
+          status:     'Active',
+          memberTier: 'Regular',
+          country:    '',
+          joinedDate: today,
+        });
+      }
 
       // 2. Create reservation
       await apiPost('/api/reservations', {
@@ -218,9 +230,9 @@ const NewReservation = () => {
                   <input className={inp} placeholder="+1 (555) 000-0000"
                     value={phone} onChange={e => setPhone(e.target.value)} required />
                 </Field>
-                <Field label="Email Address">
+                <Field label="Email Address (Optional)">
                   <input className={inp} type="email" placeholder="guest@luxury.com"
-                    value={email} onChange={e => setEmail(e.target.value)} required />
+                    value={email} onChange={e => setEmail(e.target.value)} />
                 </Field>
                 <Field label="National ID / Passport">
                   <input className={inp} placeholder="ID Number"

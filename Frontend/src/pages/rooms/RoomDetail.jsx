@@ -7,9 +7,9 @@ import {
 
 import DashboardLayout from '../../components/templates/DashboardLayout';
 import { useRole }     from '../../hooks/useRole';
-import { canRoom, canEditStatus, STATUS_OPTIONS_FOR_ROLE } from '../../utils/roomPermissions';
+import { canRoom, canEditStatus, canEditFull, STATUS_OPTIONS_FOR_ROLE } from '../../utils/roomPermissions';
 import { STATUS_STYLE, AMENITY_ICONS, AMENITY_OPTIONS, BED_TYPES, FLOOR_LABELS, ROOM_STATUSES } from '../../data/rooms';
-import { getRoomById, updateRoom, deleteRoom } from '../../utils/api';
+import { getRoomById, updateRoom, deleteRoom, updateRoomStatus, getHousekeepingTasks } from '../../utils/api';
 
 /* ─── helpers ───────────────────────────────────────────── */
 const inputCls = 'w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-gold-400 bg-white';
@@ -267,21 +267,59 @@ const RoomDetail = () => {
   const role     = useRole();
   const basePath = `/${role}`;
 
-  const [room,        setRoom]        = useState(null);
-  const [loading,     setLoading]     = useState(true);
-  const [error,       setError]       = useState('');
-  const [status,      setStatus]      = useState('');
-  const [showEdit,    setShowEdit]    = useState(false);
-  const [showDelete,  setShowDelete]  = useState(false);
+  const [room,            setRoom]            = useState(null);
+  const [loading,         setLoading]         = useState(true);
+  const [error,           setError]           = useState('');
+  const [status,          setStatus]          = useState('');
+  const [showEdit,        setShowEdit]        = useState(false);
+  const [showDelete,      setShowDelete]      = useState(false);
+  const [cleaningRecords, setCleaningRecords] = useState([]);
 
   useEffect(() => {
-    getRoomById(id)
-      .then(data => { setRoom(data); setStatus(data.status); })
+    setLoading(true);
+    Promise.all([
+      getRoomById(id),
+      getHousekeepingTasks()
+    ])
+      .then(([roomData, tasksData]) => {
+        setRoom(roomData);
+        setStatus(roomData.status);
+
+        const roomTasks = tasksData.filter(t => t.room?.id === Number(id) && t.status === 'Completed');
+        const mapped = roomTasks.map(t => {
+          let recDate = new Date().toISOString().split('T')[0];
+          if (t.assignedTime && t.assignedTime.includes('-')) {
+            recDate = t.assignedTime.split(' ')[0];
+          }
+          return {
+            id: t.id,
+            date: recDate,
+            startTime: t.assignedTime || '09:00 AM',
+            endTime: t.dueTime || '10:00 AM',
+            staff: t.housekeeper?.fullName || 'Unassigned',
+            notes: t.notes || '',
+            checklist: t.checklist || []
+          };
+        });
+        setCleaningRecords(mapped);
+      })
       .catch(() => setError('Room not found or backend is unavailable.'))
       .finally(() => setLoading(false));
   }, [id]);
 
   const statusOptions = STATUS_OPTIONS_FOR_ROLE(role);
+
+  const handleStatusChange = async (newStatus) => {
+    if (!room) return;
+    try {
+      setStatus(newStatus);
+      await updateRoomStatus(room.id, newStatus);
+    } catch (err) {
+      console.error(err);
+      alert(`Failed to update status: ${err.message || err}`);
+      setStatus(room.status);
+    }
+  };
 
   if (loading) return (
     <DashboardLayout role={role} userName={userNames[role]} userRole={userRoles[role]}>
@@ -346,17 +384,19 @@ const RoomDetail = () => {
 
         <div className="flex items-center gap-2 flex-wrap justify-end">
           {statusOptions.length > 0 && (
-            <select value={status} onChange={(e) => setStatus(e.target.value)}
+            <select value={status} onChange={(e) => handleStatusChange(e.target.value)}
               className="text-sm border border-gray-200 rounded-xl px-3 py-2 text-gray-700 bg-white outline-none focus:ring-2 focus:ring-gold-400 cursor-pointer">
               {statusOptions.map(s => <option key={s}>{s}</option>)}
             </select>
           )}
-          <button onClick={() => setShowEdit(true)}
-            className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-            <Pencil className="w-4 h-4" /> Edit Room
-          </button>
+          {canEditFull(role) && (
+            <button onClick={() => setShowEdit(true)}
+              className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+              <Pencil className="w-4 h-4" /> Edit Room
+            </button>
+          )}
           {canEditStatus(role) && (
-            <button onClick={() => setStatus('Cleaning')}
+            <button onClick={() => handleStatusChange('Cleaning')}
               className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
               <CheckCircle className="w-4 h-4" /> Mark for Cleaning
             </button>
@@ -451,7 +491,24 @@ const RoomDetail = () => {
                 <h3 className="text-sm font-bold text-gray-900">Cleaning History</h3>
                 <History className="w-4 h-4 text-gray-400" />
               </div>
-              <p className="text-xs text-gray-400 text-center py-4">No cleaning records yet.</p>
+              {cleaningRecords.length > 0 ? (
+                <div className="space-y-3 max-h-64 overflow-y-auto">
+                  {cleaningRecords.map(rec => (
+                    <div key={rec.id} className="flex justify-between items-start border-b border-gray-100 pb-2 text-xs">
+                      <div>
+                        <p className="font-semibold text-gray-800">{rec.date} • {rec.startTime} - {rec.endTime}</p>
+                        <p className="text-gray-500">By: {rec.staff}</p>
+                        {rec.notes && <p className="text-amber-600 italic">"{rec.notes}"</p>}
+                      </div>
+                      <span className="bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded font-bold">
+                        {rec.checklist.filter(c => c.done).length}/{rec.checklist.length} Done
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 text-center py-4">No cleaning records yet.</p>
+              )}
             </div>
           )}
 
