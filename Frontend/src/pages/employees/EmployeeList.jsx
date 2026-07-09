@@ -98,8 +98,19 @@ const EmployeeList = () => {
         e.fullName?.toLowerCase().includes(q) ||
         e.email?.toLowerCase().includes(q) ||
         String(e.id).includes(q) ||
-        e.role?.name?.toLowerCase().includes(q)
+        (typeof e.role === 'string' && e.role.toLowerCase().includes(q))
       )) return false;
+
+      
+      if (deptFilter !== 'All' && e.department !== deptFilter) return false;
+
+      
+      if (statusFilter !== 'All') {
+        const isActive = e.enabled;
+        if (statusFilter === 'Active' && !isActive) return false;
+        if (statusFilter === 'Inactive' && isActive) return false;
+      }
+
       return true;
     });
   }, [employees, search, deptFilter, statusFilter]);
@@ -182,7 +193,7 @@ const EmployeeList = () => {
           icon={<UserCog className="w-4 h-4 text-blue-600" />}
           iconBg="bg-blue-100"
           label="System Roles"
-          value={[...new Set(employees.map(e=>e.role))].length}
+          value={[...new Set(employees.map(e=>e.systemRole))].filter(r => r && r !== 'none').length}
           badge="Roles"
           badgeVariant="green"
         />

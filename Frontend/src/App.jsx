@@ -1,61 +1,61 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
-// Auth
+
 import LoginPage             from './pages/LoginPage';
 
-// Role dashboards
+
 import AdminDashboard        from './pages/AdminDashboard';
 import ManagerDashboard      from './pages/ManagerDashboard';
 import ReceptionistDashboard from './pages/ReceptionistDashboard';
 import HousekeeperDashboard  from './pages/HousekeeperDashboard';
 
-// Reservation module
+
 import ReservationList   from './pages/reservations/ReservationList';
 import NewReservation    from './pages/reservations/NewReservation';
 import ReservationDetail from './pages/reservations/ReservationDetail';
 
-// Room module
 import RoomList   from './pages/rooms/RoomList';
 import RoomDetail from './pages/rooms/RoomDetail';
 import AddRoom    from './pages/rooms/AddRoom';
 
-// Customer module
+
 import CustomerList   from './pages/customers/CustomerList';
 import CustomerDetail from './pages/customers/CustomerDetail';
 import AddCustomer    from './pages/customers/AddCustomer';
 import EditCustomer   from './pages/customers/EditCustomer';
 
-// Housekeeping module
+
 import HousekeepingList from './pages/housekeeping/HousekeepingList';
 import TaskDetail       from './pages/housekeeping/TaskDetail';
 import AssignTask       from './pages/housekeeping/AssignTask';
 
-// Billing module
+
 import BillingList      from './pages/billing/BillingList';
 import InvoiceDetail    from './pages/billing/InvoiceDetail';
 import GenerateInvoice  from './pages/billing/GenerateInvoice';
 
-// Employee module
+
 import EmployeeList   from './pages/employees/EmployeeList';
 import EmployeeDetail from './pages/employees/EmployeeDetail';
 import AddEmployee    from './pages/employees/AddEmployee';
+import EditEmployee   from './pages/employees/EditEmployee';
 
-// Check-In / Check-Out module
+
 import CheckInPage  from './pages/checkin/CheckInPage';
 import CheckOutPage from './pages/checkout/CheckOutPage';
 
-// Maintenance & Cleaning History
+
 import MaintenancePage    from './pages/maintenance/MaintenancePage';
 import CleaningHistoryPage from './pages/cleaning/CleaningHistoryPage';
 
 const App = () => (
   <BrowserRouter>
     <Routes>
-      {/* Auth */}
+      
       <Route path="/" element={<LoginPage />} />
 
-      {/* ── Admin ── */}
+      
       <Route path="/admin"                          element={<AdminDashboard />} />
       <Route path="/admin/reservations"             element={<ReservationList />} />
       <Route path="/admin/reservations/new"         element={<NewReservation />} />
@@ -76,12 +76,13 @@ const App = () => (
       <Route path="/admin/employees"                element={<EmployeeList />} />
       <Route path="/admin/employees/new"            element={<AddEmployee />} />
       <Route path="/admin/employees/:id"            element={<EmployeeDetail />} />
+      <Route path="/admin/employees/:id/edit"       element={<EditEmployee />} />
       <Route path="/admin/check-in"                 element={<CheckInPage />} />
       <Route path="/admin/check-out"                element={<CheckOutPage />} />
       <Route path="/admin/maintenance"              element={<MaintenancePage />} />
       <Route path="/admin/cleaning-history"         element={<CleaningHistoryPage />} />
 
-      {/* ── Manager (view rooms + history, no add/edit/delete) ── */}
+      
       <Route path="/manager"                        element={<ManagerDashboard />} />
       <Route path="/manager/reservations"           element={<ReservationList />} />
       <Route path="/manager/reservations/:id"       element={<ReservationDetail />} />
@@ -94,12 +95,13 @@ const App = () => (
       <Route path="/manager/housekeeping/:id"       element={<TaskDetail />} />
       <Route path="/manager/employees"              element={<EmployeeList />} />
       <Route path="/manager/employees/:id"          element={<EmployeeDetail />} />
+      <Route path="/manager/employees/:id/edit"     element={<EditEmployee />} />
       <Route path="/manager/maintenance"            element={<MaintenancePage />} />
       <Route path="/manager/cleaning-history"       element={<CleaningHistoryPage />} />
       <Route path="/manager/billing"                element={<BillingList />} />
       <Route path="/manager/billing/:id"            element={<InvoiceDetail />} />
 
-      {/* ── Receptionist (view + status-only edit, no add/delete) ── */}
+      
       <Route path="/receptionist"                   element={<ReceptionistDashboard />} />
       <Route path="/receptionist/reservations"      element={<ReservationList />} />
       <Route path="/receptionist/reservations/new"  element={<NewReservation />} />
@@ -119,7 +121,7 @@ const App = () => (
       <Route path="/receptionist/check-in"          element={<CheckInPage />} />
       <Route path="/receptionist/check-out"         element={<CheckOutPage />} />
 
-      {/* ── Housekeeper (view rooms + cleaning status only) ── */}
+      
       <Route path="/housekeeper"                    element={<HousekeeperDashboard />} />
       <Route path="/housekeeper/rooms"              element={<RoomList />} />
       <Route path="/housekeeper/rooms/:id"          element={<RoomDetail />} />
@@ -128,7 +130,7 @@ const App = () => (
       <Route path="/housekeeper/maintenance"        element={<MaintenancePage />} />
       <Route path="/housekeeper/history"            element={<CleaningHistoryPage />} />
 
-      {/* Fallback */}
+    
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   </BrowserRouter>

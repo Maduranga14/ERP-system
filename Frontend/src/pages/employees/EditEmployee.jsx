@@ -1,18 +1,18 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, User, Mail, Phone, MapPin, Briefcase,
   Clock, Calendar, Monitor, Key, Save, X, Eye, EyeOff,
-  ShieldCheck,
+  ShieldCheck, Loader2, AlertCircle
 } from 'lucide-react';
 
 import DashboardLayout from '../../components/templates/DashboardLayout';
 import { useRole }     from '../../hooks/useRole';
 import { canEmployee } from '../../utils/employeePermissions';
+import { getEmployeeById, updateEmployee } from '../../utils/api';
 import {
   DEPARTMENTS, ROLES_BY_DEPT, SHIFTS, SYSTEM_ROLES,
 } from '../../data/employees';
-import { createEmployee } from '../../utils/api';
 
 
 const userNames = {
@@ -47,21 +47,23 @@ const FormField = ({ label, icon, required, error, children }) => (
   </div>
 );
 
-const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-navy-500 focus:ring-2 focus:ring-navy-100 transition-all placeholder-gray-400 bg-white";
+const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-navy-500 focus:ring-2 focus:ring-navy-100 transition-all placeholder-gray-400 bg-white disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed";
 const errCls   = "border-red-400 focus:ring-red-100";
 
 
-const AddEmployee = () => {
+const EditEmployee = () => {
   const navigate = useNavigate();
+  const { id }   = useParams();
   const role     = useRole();
   const basePath = `/${role}`;
+  const isManager = role === 'manager';
 
-  
-  if (!canEmployee(role, 'create')) {
+ 
+  if (!canEmployee(role, 'edit')) {
     return (
       <DashboardLayout role={role} userName={userNames[role]} userRole={userRoles[role]}>
         <div className="flex flex-col items-center justify-center h-64 gap-3">
-          <p className="text-gray-500 font-medium">You don&apos;t have permission to add employees.</p>
+          <p className="text-gray-500 font-medium">You don&apos;t have permission to edit employees.</p>
           <button onClick={() => navigate(-1)} className="text-sm text-navy-700 hover:underline">Go back</button>
         </div>
       </DashboardLayout>
@@ -76,19 +78,47 @@ const AddEmployee = () => {
     department:  'Reception',
     empRole:     'Receptionist',
     shift:       SHIFTS[0],
-    joinDate:    new Date().toISOString().split('T')[0],
+    joinDate:    '',
     username:    '',
     password:    '',
     systemRole:  'none',
   });
-  const [errors,       setErrors]       = useState({});
-  const [saving,       setSaving]       = useState(false);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    getEmployeeById(id)
+      .then((data) => {
+        setForm({
+          fullName:    data.fullName || '',
+          phone:       data.phone || '',
+          email:       data.email || '',
+          address:     data.address || '',
+          department:  data.department || 'Reception',
+          empRole:     data.role || 'Receptionist', // maps backend role to empRole job title
+          shift:       data.shift || SHIFTS[0],
+          joinDate:    data.joinDate || '',
+          username:    data.username || '',
+          password:    '', 
+          systemRole:  data.systemRole || 'none',
+        });
+        setError('');
+      })
+      .catch((err) => {
+        console.error(err);
+        setError('Failed to load employee details for editing.');
+      })
+      .finally(() => setLoading(false));
+  }, [id]);
 
   const set = (field, value) => {
     setForm((f) => {
       const next = { ...f, [field]: value };
-      
+      // Auto-reset role when department changes
       if (field === 'department') {
         const roles = ROLES_BY_DEPT[value] || [];
         next.empRole = roles[0] || '';
@@ -99,6 +129,7 @@ const AddEmployee = () => {
   };
 
   const validate = () => {
+    if (isManager) return {}; 
     const e = {};
     if (!form.fullName.trim())  e.fullName  = 'Full name is required';
     if (!form.phone.trim())     e.phone     = 'Phone number is required';
@@ -107,11 +138,10 @@ const AddEmployee = () => {
     if (!form.department)       e.department = 'Department is required';
     if (!form.empRole)          e.empRole    = 'Role is required';
     if (!form.shift)            e.shift      = 'Shift is required';
-    // System access
+    
     if (form.systemRole !== 'none') {
       if (!form.username.trim()) e.username = 'Username is required for system access';
-      if (!form.password.trim()) e.password = 'Password is required for system access';
-      else if (form.password.length < 8) e.password = 'Password must be at least 8 characters';
+      if (form.password && form.password.length < 8) e.password = 'Password must be at least 8 characters';
     }
     return e;
   };
@@ -121,32 +151,56 @@ const AddEmployee = () => {
     if (Object.keys(e).length > 0) { setErrors(e); return; }
     setSaving(true);
     try {
-      const payload = {
+      const payload = isManager ? {
+        shift: form.shift 
+      } : {
         fullName: form.fullName,
         phone: form.phone,
         email: form.email,
         address: form.address,
         department: form.department,
-        role: form.empRole, // mapped to backend's empRole field via @JsonProperty("role")
+        role: form.empRole,
         shift: form.shift,
         joinDate: form.joinDate,
         username: form.username,
         systemRole: form.systemRole,
-        password: form.systemRole !== 'none' ? form.password : null,
+        password: form.password || null, // only send password if modified
         enabled: true
       };
-      await createEmployee(payload);
-      alert(`Employee "${form.fullName}" created successfully.`);
-      navigate(`${basePath}/employees`);
+
+      await updateEmployee(id, payload);
+      alert(`Employee updated successfully.`);
+      navigate(`${basePath}/employees/${id}`);
     } catch (err) {
       console.error(err);
-      alert(err.message || 'Failed to create employee. Please try again.');
+      alert(err.message || 'Failed to update employee details.');
     } finally {
       setSaving(false);
     }
   };
 
   const availableRoles = ROLES_BY_DEPT[form.department] || [];
+
+  if (loading) {
+    return (
+      <DashboardLayout role={role} userName={userNames[role]} userRole={userRoles[role]}>
+        <div className="flex items-center justify-center h-64 gap-3 text-gray-400">
+          <Loader2 className="w-6 h-6 animate-spin" /> Loading employee profile...
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <DashboardLayout role={role} userName={userNames[role]} userRole={userRoles[role]}>
+        <div className="flex flex-col items-center justify-center h-64 gap-3">
+          <p className="text-red-500 font-medium">{error}</p>
+          <button onClick={() => navigate(-1)} className="text-sm text-navy-700 hover:underline">Go back</button>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout
@@ -156,7 +210,7 @@ const AddEmployee = () => {
       notificationCount={3}
       searchPlaceholder="Search employees, roles or ID..."
     >
-    
+      
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
           <button
@@ -166,8 +220,8 @@ const AddEmployee = () => {
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Add New Employee</h1>
-            <p className="text-xs text-gray-400 mt-0.5">Fill in the details to register a new employee</p>
+            <h1 className="text-xl font-bold text-gray-900">Edit Employee Profile</h1>
+            <p className="text-xs text-gray-400 mt-0.5">Modify details and update shift assignments</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -184,18 +238,28 @@ const AddEmployee = () => {
             className="flex items-center gap-2 bg-navy-900 hover:bg-navy-800 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors shadow-sm"
           >
             <Save className="w-4 h-4" />
-            {saving ? 'Saving…' : 'Save Employee'}
+            {saving ? 'Saving…' : 'Save Changes'}
           </button>
         </div>
       </div>
 
+      
+      {isManager && (
+        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
+          <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+          <p className="text-xs text-amber-700 font-medium">
+            You are editing as a General Manager. You only have permission to change this employee's shift assignment. All other details are read-only.
+          </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-       
+        
         <div className="lg:col-span-2 flex flex-col gap-4">
 
-         
-          <div className="card p-5">
+          
+          <div className="card p-5 bg-white">
             <SectionHeader
               icon={<User className="w-4 h-4" />}
               title="Personal Details"
@@ -205,6 +269,7 @@ const AddEmployee = () => {
               <div className="sm:col-span-2">
                 <FormField label="Full Name" required icon={<User className="w-3 h-3" />} error={errors.fullName}>
                   <input
+                    disabled={isManager}
                     value={form.fullName}
                     onChange={(e) => set('fullName', e.target.value)}
                     placeholder="e.g. John Silva"
@@ -214,6 +279,7 @@ const AddEmployee = () => {
               </div>
               <FormField label="Phone Number" required icon={<Phone className="w-3 h-3" />} error={errors.phone}>
                 <input
+                  disabled={isManager}
                   type="tel"
                   value={form.phone}
                   onChange={(e) => set('phone', e.target.value)}
@@ -223,6 +289,7 @@ const AddEmployee = () => {
               </FormField>
               <FormField label="Email Address" required icon={<Mail className="w-3 h-3" />} error={errors.email}>
                 <input
+                  disabled={isManager}
                   type="email"
                   value={form.email}
                   onChange={(e) => set('email', e.target.value)}
@@ -233,6 +300,7 @@ const AddEmployee = () => {
               <div className="sm:col-span-2">
                 <FormField label="Address" icon={<MapPin className="w-3 h-3" />}>
                   <textarea
+                    disabled={isManager}
                     value={form.address}
                     onChange={(e) => set('address', e.target.value)}
                     placeholder="Street, City, Province, Sri Lanka"
@@ -244,8 +312,7 @@ const AddEmployee = () => {
             </div>
           </div>
 
-          
-          <div className="card p-5">
+          <div className="card p-5 bg-white">
             <SectionHeader
               icon={<Briefcase className="w-4 h-4" />}
               title="Employment Details"
@@ -254,6 +321,7 @@ const AddEmployee = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField label="Department" required icon={<Briefcase className="w-3 h-3" />} error={errors.department}>
                 <select
+                  disabled={isManager}
                   value={form.department}
                   onChange={(e) => set('department', e.target.value)}
                   className={`${inputCls} ${errors.department ? errCls : ''}`}
@@ -266,6 +334,7 @@ const AddEmployee = () => {
 
               <FormField label="Role / Position" required icon={<User className="w-3 h-3" />} error={errors.empRole}>
                 <select
+                  disabled={isManager}
                   value={form.empRole}
                   onChange={(e) => set('empRole', e.target.value)}
                   className={`${inputCls} ${errors.empRole ? errCls : ''}`}
@@ -286,8 +355,9 @@ const AddEmployee = () => {
                 </select>
               </FormField>
 
-              <FormField label="Join Date" icon={<Calendar className="w-3.5 h-3.5" />}>
+              <FormField label="Join Date" icon={<Calendar className="w-3 h-3" />}>
                 <input
+                  disabled={isManager}
                   type="date"
                   value={form.joinDate}
                   onChange={(e) => set('joinDate', e.target.value)}
@@ -298,9 +368,9 @@ const AddEmployee = () => {
           </div>
         </div>
 
-        
+
         <div className="flex flex-col gap-4">
-          <div className="card p-5 border-2 border-amber-100">
+          <div className="card p-5 border-2 border-slate-100 bg-white">
             <SectionHeader
               icon={<Monitor className="w-4 h-4" />}
               title="System Access"
@@ -330,9 +400,10 @@ const AddEmployee = () => {
                   return (
                     <button
                       key={value}
+                      disabled={isManager}
                       onClick={() => set('systemRole', value)}
                       className={[
-                        'flex items-start gap-3 p-2.5 rounded-xl border text-left transition-all w-full',
+                        'flex items-start gap-3 p-2.5 rounded-xl border text-left transition-all w-full disabled:opacity-75 disabled:cursor-not-allowed',
                         active ? `${s.border} bg-slate-50` : 'border-gray-100 hover:border-gray-200',
                       ].join(' ')}
                     >
@@ -361,7 +432,7 @@ const AddEmployee = () => {
                 error={errors.username}
               >
                 <input
-                  disabled={form.systemRole === 'none'}
+                  disabled={isManager || form.systemRole === 'none'}
                   value={form.username}
                   onChange={(e) => set('username', e.target.value)}
                   placeholder={form.systemRole === 'none' ? "Select a system role to enable" : "john.silva"}
@@ -370,23 +441,22 @@ const AddEmployee = () => {
               </FormField>
 
               <FormField 
-                label="Password" 
-                required={form.systemRole !== 'none'} 
+                label="Update Password (Optional)" 
                 icon={<Key className="w-3 h-3" />} 
                 error={errors.password}
               >
                 <div className="relative">
                   <input
-                    disabled={form.systemRole === 'none'}
+                    disabled={isManager || form.systemRole === 'none'}
                     type={showPassword ? 'text' : 'password'}
                     value={form.password}
                     onChange={(e) => set('password', e.target.value)}
-                    placeholder={form.systemRole === 'none' ? "Select a system role to enable" : "Min. 8 characters"}
+                    placeholder={form.systemRole === 'none' ? "Select a system role to enable" : "Leave blank to keep current password"}
                     className={`${inputCls} pr-9 ${errors.password ? errCls : ''}`}
                   />
                   <button
                     type="button"
-                    disabled={form.systemRole === 'none'}
+                    disabled={isManager || form.systemRole === 'none'}
                     onClick={() => setShowPassword((s) => !s)}
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 disabled:opacity-0"
                   >
@@ -401,7 +471,7 @@ const AddEmployee = () => {
               <div className="flex items-start gap-2 bg-gray-50 border border-gray-100 rounded-xl p-3 mt-1">
                 <ShieldCheck className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                 <p className="text-xs text-gray-500">
-                  Select a system role above to grant this employee portal access.
+                  This employee has no portal access.
                 </p>
               </div>
             )}
@@ -412,4 +482,4 @@ const AddEmployee = () => {
   );
 };
 
-export default AddEmployee;
+export default EditEmployee;

@@ -1,18 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, User, Phone, Mail, MapPin, Briefcase,
   Clock, Calendar, ShieldCheck, Key, UserX, UserCheck,
-  Monitor, Activity, AlertCircle, Lock,
+  Monitor, Activity, AlertCircle, Lock, Loader2, Trash2,
 } from 'lucide-react';
 
 import DashboardLayout from '../../components/templates/DashboardLayout';
 import Badge           from '../../components/atoms/Badge';
 import { useRole }     from '../../hooks/useRole';
 import { canEmployee } from '../../utils/employeePermissions';
-import { EMPLOYEES }   from '../../data/employees';
+import { getEmployeeById, updateEmployee, deleteEmployee } from '../../utils/api';
 
-/* ── Helpers ───────────────────────────────────────────────── */
+
 const STATUS_VARIANT = {
   Active:    'green',
   'On Leave':'amber',
@@ -42,7 +42,7 @@ const userRoles = {
   admin: 'Super Administrator', manager: 'General Manager', receptionist: 'Front Desk Lead',
 };
 
-/* ── Section Card ──────────────────────────────────────────── */
+
 const SectionCard = ({ title, icon, children, className = '', action, accent }) => (
   <div className={`card p-5 ${className}`}>
     <div className={`flex items-center justify-between mb-4 pb-3 border-b ${accent ? 'border-amber-100' : 'border-gray-100'}`}>
@@ -61,7 +61,7 @@ const SectionCard = ({ title, icon, children, className = '', action, accent }) 
   </div>
 );
 
-/* ── Info Row ──────────────────────────────────────────────── */
+
 const InfoRow = ({ label, value, icon }) => (
   <div className="flex items-start gap-3">
     {icon && (
@@ -76,7 +76,7 @@ const InfoRow = ({ label, value, icon }) => (
   </div>
 );
 
-/* ── Confirm Modal ─────────────────────────────────────────── */
+
 const ConfirmModal = ({ title, message, icon, iconBg, confirmLabel, confirmClass, onConfirm, onCancel }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
     <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 animate-in fade-in zoom-in duration-200">
@@ -103,29 +103,91 @@ const ConfirmModal = ({ title, message, icon, iconBg, confirmLabel, confirmClass
   </div>
 );
 
-/* ── Main Component ────────────────────────────────────────── */
+
 const EmployeeDetail = () => {
   const navigate  = useNavigate();
   const { id }    = useParams();
   const role      = useRole();
   const basePath  = `/${role}`;
 
-  const employee = EMPLOYEES.find((e) => e.id === id) || EMPLOYEES[0];
+  const [employee, setEmployee] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [modal, setModal] = useState(null); 
+  const [updating, setUpdating] = useState(false);
 
-  const [modal, setModal] = useState(null); // 'reset'|'activate'|'deactivate'|null
-
-  const handleModalAction = () => {
-    if (modal === 'reset') {
-      alert(`Password reset link sent to ${employee.email} (mock).`);
-    } else if (modal === 'activate') {
-      alert(`Account for ${employee.fullName} activated (mock).`);
-    } else if (modal === 'deactivate') {
-      alert(`Account for ${employee.fullName} deactivated (mock).`);
-    }
-    setModal(null);
+  const fetchEmployee = () => {
+    setLoading(true);
+    getEmployeeById(id)
+      .then((data) => {
+        setEmployee(data);
+        setError('');
+      })
+      .catch((err) => {
+        console.error(err);
+        setError('Failed to load employee details.');
+      })
+      .finally(() => setLoading(false));
   };
 
-  const initials = employee.initials || employee.fullName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+  useEffect(() => {
+    fetchEmployee();
+  }, [id]);
+
+  const handleModalAction = async () => {
+    if (!employee) return;
+    setUpdating(true);
+    try {
+      if (modal === 'reset') {
+        await updateEmployee(id, { ...employee, password: "changeit123" });
+        alert(`Password for ${employee.fullName} has been reset to "changeit123" successfully.`);
+        fetchEmployee();
+      } else if (modal === 'activate') {
+        await updateEmployee(id, { ...employee, enabled: true });
+        alert(`Account for ${employee.fullName} activated successfully.`);
+        fetchEmployee();
+      } else if (modal === 'deactivate') {
+        await updateEmployee(id, { ...employee, enabled: false });
+        alert(`Account for ${employee.fullName} deactivated successfully.`);
+        fetchEmployee();
+      } else if (modal === 'delete') {
+        await deleteEmployee(id);
+        alert(`Employee "${employee.fullName}" has been permanently deleted.`);
+        navigate(`${basePath}/employees`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert(`Operation failed: ${err.message || err}`);
+    } finally {
+      setUpdating(false);
+      setModal(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <DashboardLayout role={role} userName={userNames[role]} userRole={userRoles[role]}>
+        <div className="flex items-center justify-center h-64 gap-3 text-gray-400">
+          <Loader2 className="w-6 h-6 animate-spin" /> Loading employee details...
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (error || !employee) {
+    return (
+      <DashboardLayout role={role} userName={userNames[role]} userRole={userRoles[role]}>
+        <div className="flex flex-col items-center justify-center h-64 gap-3">
+          <p className="text-red-500 font-medium">{error || 'Employee not found.'}</p>
+          <button onClick={() => navigate(`${basePath}/employees`)} className="text-sm text-navy-700 hover:underline">
+            Go back to list
+          </button>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const initials = employee.fullName ? employee.fullName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() : '??';
 
   return (
     <DashboardLayout
@@ -157,12 +219,12 @@ const EmployeeDetail = () => {
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2 mb-1">
               <h2 className="text-xl font-bold text-gray-900">{employee.fullName}</h2>
-              <Badge variant={STATUS_VARIANT[employee.status] || 'gray'} dot size="sm">
-                {employee.status}
+              <Badge variant={employee.enabled ? 'green' : 'gray'} dot size="sm">
+                {employee.enabled ? 'Active' : 'Inactive'}
               </Badge>
             </div>
             <p className="text-sm text-gray-500 mb-2">
-              {employee.role} &bull; {employee.department} &bull; {employee.id}
+              {employee.role} &bull; {employee.department} &bull; EMP-{String(employee.id).padStart(3,'0')}
             </p>
             <div className="flex flex-wrap items-center gap-3">
               <span className="flex items-center gap-1.5 text-xs text-gray-500">
@@ -176,28 +238,38 @@ const EmployeeDetail = () => {
             </div>
           </div>
 
-          {/* Header actions */}
-          {canEmployee(role, 'edit') && (
-            <button
-              onClick={() => navigate(`${basePath}/employees/${employee.id}/edit`)}
-              className="border border-gray-300 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors flex-shrink-0"
-            >
-              Edit Profile
-            </button>
-          )}
+          
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {canEmployee(role, 'edit') && (
+              <button
+                onClick={() => navigate(`${basePath}/employees/${employee.id}/edit`)}
+                className="border border-gray-300 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Edit Profile
+              </button>
+            )}
+            {canEmployee(role, 'delete') && (
+              <button
+                onClick={() => setModal('delete')}
+                className="bg-red-50 text-red-600 border border-red-200 text-sm font-semibold px-4 py-2 rounded-lg hover:bg-red-100 transition-colors"
+              >
+                Delete Employee
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* ── 2-Col Grid: Personal + Job ── */}
+      
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
 
-        {/* Personal Information */}
+        
         <SectionCard
           title="Personal Information"
           icon={<User className="w-4 h-4" />}
         >
           <div className="flex flex-col gap-4">
-            <InfoRow label="Employee ID"   value={employee.id}       icon={<ShieldCheck className="w-3.5 h-3.5" />} />
+            <InfoRow label="Employee ID"   value={`EMP-${String(employee.id).padStart(3,'0')}`}       icon={<ShieldCheck className="w-3.5 h-3.5" />} />
             <InfoRow label="Full Name"     value={employee.fullName}  icon={<User className="w-3.5 h-3.5" />} />
             <InfoRow label="Phone Number"  value={employee.phone}     icon={<Phone className="w-3.5 h-3.5" />} />
             <InfoRow label="Email Address" value={employee.email}     icon={<Mail className="w-3.5 h-3.5" />} />
@@ -205,7 +277,7 @@ const EmployeeDetail = () => {
           </div>
         </SectionCard>
 
-        {/* Job Information */}
+       
         <SectionCard
           title="Job Information"
           icon={<Briefcase className="w-4 h-4" />}
@@ -217,15 +289,15 @@ const EmployeeDetail = () => {
             <InfoRow label="Join Date"          value={employee.joinDate}   icon={<Calendar className="w-3.5 h-3.5" />} />
             <div>
               <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Employment Status</p>
-              <Badge variant={STATUS_VARIANT[employee.status] || 'gray'} dot>
-                {employee.status}
+              <Badge variant={employee.enabled ? 'green' : 'gray'} dot>
+                {employee.enabled ? 'Active' : 'Inactive'}
               </Badge>
             </div>
           </div>
         </SectionCard>
       </div>
 
-      {/* ── System Account Card ── */}
+      
       <SectionCard
         title="System Account"
         icon={<Monitor className="w-4 h-4" />}
@@ -236,16 +308,18 @@ const EmployeeDetail = () => {
               <button
                 id="reset-password-btn"
                 onClick={() => setModal('reset')}
-                className="flex items-center gap-1.5 text-xs font-medium text-gray-600 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+                disabled={updating}
+                className="flex items-center gap-1.5 text-xs font-medium text-gray-600 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
               >
                 <Key className="w-3 h-3" />
                 Reset Password
               </button>
-              {employee.accountStatus === 'Disabled' ? (
+              {!employee.enabled ? (
                 <button
                   id="activate-account-btn"
                   onClick={() => setModal('activate')}
-                  className="flex items-center gap-1.5 text-xs font-semibold bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition-colors"
+                  disabled={updating}
+                  className="flex items-center gap-1.5 text-xs font-semibold bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
                 >
                   <UserCheck className="w-3 h-3" />
                   Activate
@@ -254,7 +328,8 @@ const EmployeeDetail = () => {
                 <button
                   id="deactivate-account-btn"
                   onClick={() => setModal('deactivate')}
-                  className="flex items-center gap-1.5 text-xs font-semibold bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors"
+                  disabled={updating}
+                  className="flex items-center gap-1.5 text-xs font-semibold bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
                 >
                   <UserX className="w-3 h-3" />
                   Deactivate
@@ -274,7 +349,7 @@ const EmployeeDetail = () => {
             </div>
           </div>
 
-          {/* System Role */}
+          
           <div className="bg-slate-50 rounded-xl p-3">
             <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">System Role</p>
             <Badge variant={SYSTEM_ROLE_VARIANT[employee.systemRole] || 'gray'}>
@@ -282,15 +357,15 @@ const EmployeeDetail = () => {
             </Badge>
           </div>
 
-          {/* Account Status */}
+          
           <div className="bg-slate-50 rounded-xl p-3">
             <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Account Status</p>
-            <Badge variant={ACCOUNT_VARIANT[employee.accountStatus] || 'gray'} dot>
-              {employee.accountStatus}
+            <Badge variant={employee.enabled ? 'green' : 'red'} dot>
+              {employee.enabled ? 'Active' : 'Disabled'}
             </Badge>
           </div>
 
-          {/* Last Login */}
+         
           <div className="bg-slate-50 rounded-xl p-3">
             <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Last Login</p>
             <div className="flex items-center gap-1.5">
@@ -302,8 +377,8 @@ const EmployeeDetail = () => {
           </div>
         </div>
 
-        {/* Access note for disabled */}
-        {employee.accountStatus === 'Disabled' && (
+        
+        {!employee.enabled && (
           <div className="mt-3 flex items-start gap-2 bg-red-50 border border-red-100 rounded-xl p-3">
             <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-red-600 font-medium">
@@ -313,8 +388,8 @@ const EmployeeDetail = () => {
           </div>
         )}
 
-        {/* System role = none note */}
-        {employee.systemRole === 'none' && employee.accountStatus !== 'Disabled' && (
+        
+        {employee.systemRole === 'none' && employee.enabled && (
           <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-xl p-3">
             <Lock className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-amber-700 font-medium">
@@ -324,7 +399,7 @@ const EmployeeDetail = () => {
         )}
       </SectionCard>
 
-      {/* ── Confirm Modals ── */}
+      
       {modal === 'reset' && (
         <ConfirmModal
           title="Reset Password"
@@ -356,6 +431,18 @@ const EmployeeDetail = () => {
           icon={<UserX className="w-5 h-5 text-red-600" />}
           iconBg="bg-red-100"
           confirmLabel="Deactivate"
+          confirmClass="bg-red-600 hover:bg-red-700"
+          onConfirm={handleModalAction}
+          onCancel={() => setModal(null)}
+        />
+      )}
+      {modal === 'delete' && (
+        <ConfirmModal
+          title="Delete Employee"
+          message={`Are you sure you want to permanently delete ${employee.fullName}? This action cannot be undone.`}
+          icon={<Trash2 className="w-5 h-5 text-red-600" />}
+          iconBg="bg-red-100"
+          confirmLabel="Delete"
           confirmClass="bg-red-600 hover:bg-red-700"
           onConfirm={handleModalAction}
           onCancel={() => setModal(null)}

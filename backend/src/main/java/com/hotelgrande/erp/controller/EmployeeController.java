@@ -1,9 +1,12 @@
 package com.hotelgrande.erp.controller;
 
 import com.hotelgrande.erp.entity.User;
+import com.hotelgrande.erp.enums.Role;
 import com.hotelgrande.erp.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,38 +22,86 @@ public class EmployeeController {
     private final PasswordEncoder passwordEncoder;
 
     @GetMapping
-    public ResponseEntity<List<User>> getAllEmployees() {
+    public ResponseEntity<?> getAllEmployees(@AuthenticationPrincipal User currentUser) {
+        if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.MANAGER) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied.");
+        }
         return ResponseEntity.ok(userRepository.findAll());
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<User> getEmployeeById(@PathVariable Long id) {
+    public ResponseEntity<?> getEmployeeById(@PathVariable Long id, @AuthenticationPrincipal User currentUser) {
+        if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.MANAGER) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied.");
+        }
         return userRepository.findById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping
-    public ResponseEntity<User> createEmployee(@RequestBody User user) {
-        if (user.getPassword() != null && !user.getPassword().isEmpty()) {
-            user.setPasswordHash(passwordEncoder.encode(user.getPassword()));
+    public ResponseEntity<?> createEmployee(@RequestBody User user, @AuthenticationPrincipal User currentUser) {
+        if (currentUser.getRole() != Role.ADMIN) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only administrators can add employees.");
+        }
+
+
+        if (userRepository.findByEmail(user.getEmail()).isPresent()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Email " + user.getEmail() + " is already in use.");
+        }
+
+        String rawPassword = user.getRawPassword();
+        if (rawPassword != null && !rawPassword.isEmpty()) {
+            user.setPasswordHash(passwordEncoder.encode(rawPassword));
         } else {
-            // Default password if not provided
+
             user.setPasswordHash(passwordEncoder.encode("changeit123"));
         }
+
         return ResponseEntity.ok(userRepository.save(user));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<User> updateEmployee(@PathVariable Long id, @RequestBody User details) {
+    public ResponseEntity<?> updateEmployee(
+            @PathVariable Long id,
+            @RequestBody User details,
+            @AuthenticationPrincipal User currentUser) {
+        if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.MANAGER) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied.");
+        }
+
         return userRepository.findById(id)
                 .map(user -> {
-                    user.setFullName(details.getFullName());
-                    user.setEmail(details.getEmail());
-                    user.setRole(details.getRole());
-                    user.setEnabled(details.isEnabled());
-                    if (details.getPassword() != null && !details.getPassword().isEmpty()) {
-                        user.setPasswordHash(passwordEncoder.encode(details.getPassword()));
+                    if (currentUser.getRole() == Role.MANAGER) {
+
+                        user.setShift(details.getShift());
+                    } else {
+
+                        user.setFullName(details.getFullName());
+
+
+                        if (!user.getEmail().equalsIgnoreCase(details.getEmail())) {
+                            if (userRepository.findByEmail(details.getEmail()).isPresent()) {
+                                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                                        .body("Email " + details.getEmail() + " is already in use.");
+                            }
+                            user.setEmail(details.getEmail());
+                        }
+
+                        user.setPhone(details.getPhone());
+                        user.setAddress(details.getAddress());
+                        user.setDepartment(details.getDepartment());
+                        user.setEmpRole(details.getEmpRole());
+                        user.setShift(details.getShift());
+                        user.setJoinDate(details.getJoinDate());
+                        user.setUsername(details.getUsername());
+                        user.setRole(details.getRole());
+                        user.setEnabled(details.isEnabled());
+
+                        String rawPassword = details.getRawPassword();
+                        if (rawPassword != null && !rawPassword.isEmpty()) {
+                            user.setPasswordHash(passwordEncoder.encode(rawPassword));
+                        }
                     }
                     return ResponseEntity.ok(userRepository.save(user));
                 })
@@ -58,11 +109,15 @@ public class EmployeeController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteEmployee(@PathVariable Long id) {
+    public ResponseEntity<?> deleteEmployee(@PathVariable Long id, @AuthenticationPrincipal User currentUser) {
+        if (currentUser.getRole() != Role.ADMIN) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only administrators can delete employees.");
+        }
+
         return userRepository.findById(id)
                 .map(user -> {
                     userRepository.delete(user);
-                    return ResponseEntity.ok().<Void>build();
+                    return ResponseEntity.ok().build();
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
