@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   Printer, Send, Pencil, ArrowLeft, CheckCircle, Clock,
   Shield, Activity, Loader2, User, BedDouble, Calendar,
-  DollarSign, Tag, CheckCircle2, XCircle
+  DollarSign, Tag, CheckCircle2, XCircle, X, Save, Mail,
 } from 'lucide-react';
 
 import DashboardLayout from '../../components/templates/DashboardLayout';
@@ -11,7 +11,11 @@ import Badge from '../../components/atoms/Badge';
 import Button from '../../components/atoms/Button';
 import { useRole } from '../../hooks/useRole';
 import { can } from '../../utils/permissions';
-import { getReservationById, checkIn as apiCheckIn, checkOut as apiCheckOut, deleteReservation } from '../../utils/api';
+import {
+  getReservationById, updateReservation,
+  checkIn as apiCheckIn, checkOut as apiCheckOut, deleteReservation,
+  getRooms,
+} from '../../utils/api';
 
 const STATUS_VARIANT = {
   'Confirmed': 'green', 'Checked In': 'blue',

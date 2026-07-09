@@ -29,7 +29,13 @@ public class RoomController {
     }
 
     @PostMapping
-    public ResponseEntity<Room> createRoom(@RequestBody Room room) {
+    public ResponseEntity<?> createRoom(@RequestBody Room room) {
+        if (roomRepository.findByNumber(room.getNumber()).isPresent()) {
+            return ResponseEntity.badRequest().body("Room number " + room.getNumber() + " already exists.");
+        }
+        if (room.getStatus() == null || room.getStatus().isBlank()) {
+            room.setStatus("Available");
+        }
         return ResponseEntity.ok(roomRepository.save(room));
     }
 
@@ -48,7 +54,10 @@ public class RoomController {
                     room.setViewType(roomDetails.getViewType());
                     room.setWing(roomDetails.getWing());
                     room.setDescription(roomDetails.getDescription());
-                    room.setAmenities(roomDetails.getAmenities());
+                    room.getAmenities().clear();
+                    if (roomDetails.getAmenities() != null) {
+                        room.getAmenities().addAll(roomDetails.getAmenities());
+                    }
                     return ResponseEntity.ok(roomRepository.save(room));
                 })
                 .orElse(ResponseEntity.notFound().build());

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Upload, CheckCircle } from 'lucide-react';
+import { ChevronRight, Upload, CheckCircle, Loader2 } from 'lucide-react';
 
 import DashboardLayout from '../../components/templates/DashboardLayout';
 import { useRole }     from '../../hooks/useRole';
 import { FLOOR_LABELS, BED_TYPES, AMENITY_OPTIONS } from '../../data/rooms';
+import { createRoom }  from '../../utils/api';
 
 /* ─── Reusable field wrapper ─────────────────────────────── */
 const Field = ({ label, children }) => (
@@ -32,16 +33,52 @@ const AddRoom = () => {
   });
   const [amenities, setAmenities] = useState([]);
   const [statusLabel] = useState('Available');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   const toggleAmenity = (a) =>
     setAmenities((prev) => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a]);
 
   const set = (key) => (e) => setForm({ ...form, [key]: e.target.value });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    alert(`Room ${form.number} created!`);
-    navigate('/admin/rooms');
+    if (form.type === 'Select Type') { setError('Please select a room type.'); return; }
+    setError('');
+    setSubmitting(true);
+
+    // Map floor label to floor number
+    const floorMap = { 'Ground Floor': 0, '1st Floor': 1, '2nd Floor': 2, '3rd Floor': 3, '4th Floor': 4, '5th Floor': 5 };
+
+    const payload = {
+      number:       form.number,
+      type:         form.type,
+      floor:        floorMap[form.floor] ?? 1,
+      capacity:     parseInt(form.capacity, 10),
+      pricePerNight: parseFloat(form.price),
+      bedType:      form.bedType,
+      status:       'Available',
+      lastCleaned:  '-',
+      viewType:     '',
+      wing:         '',
+      description:  '',
+      amenities,
+    };
+
+    try {
+      await createRoom(payload);
+      navigate('/admin/rooms');
+    } catch (err) {
+      // Try to extract error message from response body
+      const msg = err.message || '';
+      if (msg.includes('400')) {
+        setError('Room number already exists. Please use a unique room number.');
+      } else {
+        setError('Failed to create room. Please check the backend is running.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -179,13 +216,15 @@ const AddRoom = () => {
 
         {/* Footer actions */}
         <div className="flex items-center justify-end gap-3 mt-6 pt-5 border-t border-gray-100">
+          {error && <p className="text-sm text-red-500 mr-auto">{error}</p>}
           <button type="button" onClick={() => navigate('/admin/rooms')}
             className="px-6 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
             Cancel
           </button>
-          <button type="submit"
-            className="flex items-center gap-2 px-6 py-2.5 bg-navy-900 hover:bg-navy-800 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm">
-            <CheckCircle className="w-4 h-4" /> Create Room
+          <button type="submit" disabled={submitting}
+            className="flex items-center gap-2 px-6 py-2.5 bg-navy-900 hover:bg-navy-800 disabled:opacity-60 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm">
+            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+            {submitting ? 'Creating...' : 'Create Room'}
           </button>
         </div>
       </form>
