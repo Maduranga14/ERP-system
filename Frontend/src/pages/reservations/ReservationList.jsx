@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Download, Filter, ChevronLeft, ChevronRight,
-  Calendar, Eye, LogIn, LogOut, Users,
+  Calendar, Eye, LogIn, LogOut, Users, Loader2,
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 
@@ -13,9 +13,8 @@ import Avatar          from '../../components/atoms/Avatar';
 import ActivityItem    from '../../components/molecules/ActivityItem';
 import { useRole }     from '../../hooks/useRole';
 import { can }         from '../../utils/permissions';
-import {
-  RESERVATIONS, STATUS_OPTIONS, ROOM_TYPE_OPTIONS, PAYMENT_OPTIONS,
-} from '../../data/reservations';
+import { STATUS_OPTIONS, ROOM_TYPE_OPTIONS, PAYMENT_OPTIONS } from '../../data/reservations';
+import { getReservations } from '../../utils/api';
 
 const STATUS_VARIANT  = { 'Confirmed':'green','Checked In':'blue','Pending':'amber','Checked Out':'gray','Cancelled':'red' };
 const PAYMENT_VARIANT = { 'Paid':'green','Partial':'amber','Pending':'red','Refunded':'purple' };
@@ -36,18 +35,42 @@ const ReservationList = () => {
   const navigate = useNavigate();
   const role = useRole();
 
-  const [statusFilter,  setStatusFilter]  = useState('All');
-  const [roomTypeFilter,setRoomTypeFilter] = useState('All');
-  const [paymentFilter, setPaymentFilter]  = useState('All');
-  const [currentPage,   setCurrentPage]    = useState(1);
+  const [reservations,   setReservations]   = useState([]);
+  const [loading,        setLoading]        = useState(true);
+  const [error,          setError]          = useState('');
+  const [statusFilter,   setStatusFilter]   = useState('All');
+  const [roomTypeFilter, setRoomTypeFilter]  = useState('All');
+  const [paymentFilter,  setPaymentFilter]   = useState('All');
+  const [currentPage,    setCurrentPage]     = useState(1);
+
+  useEffect(() => {
+    getReservations()
+      .then(data => setReservations(data))
+      .catch(() => setError('Failed to load reservations.'))
+      .finally(() => setLoading(false));
+  }, []);
 
   const basePath = role === 'admin' ? '/admin' : role === 'manager' ? '/manager' : '/receptionist';
 
-  const filtered = RESERVATIONS.filter((r) => {
+  const filtered = reservations.filter((r) => {
     if (statusFilter  !== 'All' && r.status  !== statusFilter)  return false;
     if (paymentFilter !== 'All' && r.payment !== paymentFilter) return false;
     return true;
   });
+
+  if (loading) return (
+    <DashboardLayout role={role} userName={userNames[role]} userRole={userRoles[role]}>
+      <div className="flex items-center justify-center h-64 gap-3 text-gray-400">
+        <Loader2 className="w-6 h-6 animate-spin" /> Loading reservations...
+      </div>
+    </DashboardLayout>
+  );
+
+  if (error) return (
+    <DashboardLayout role={role} userName={userNames[role]} userRole={userRoles[role]}>
+      <div className="flex items-center justify-center h-64 text-red-500 text-sm">{error}</div>
+    </DashboardLayout>
+  );
 
   return (
     <DashboardLayout
@@ -83,16 +106,15 @@ const ReservationList = () => {
           {/* Stat Cards */}
           <div className="grid grid-cols-5 gap-3">
             {[
-              { label:'Total',      value:'1,284', sub:'+4.2%',           color:'text-gray-900',  sub_color:'text-green-500' },
-              { label:'Confirmed',  value:'842',   sub:'Active Bookings',  color:'text-green-600', sub_color:'text-gray-400'  },
-              { label:'Pending',    value:'156',   sub:'Requires Action',  color:'text-amber-500', sub_color:'text-gray-400'  },
-              { label:'Checked In', value:'234',   sub:'In-house Guests',  color:'text-blue-600',  sub_color:'text-gray-400'  },
-              { label:'Cancelled',  value:'52',    sub:'Last 30 Days',     color:'text-red-500',   sub_color:'text-gray-400'  },
+              { label:'Total',      value: reservations.length,                                              color:'text-gray-900' },
+              { label:'Confirmed',  value: reservations.filter(r=>r.status==='Confirmed').length,            color:'text-green-600' },
+              { label:'Pending',    value: reservations.filter(r=>r.status==='Pending').length,              color:'text-amber-500' },
+              { label:'Checked In', value: reservations.filter(r=>r.status==='Checked In').length,           color:'text-blue-600' },
+              { label:'Cancelled',  value: reservations.filter(r=>r.status==='Cancelled').length,            color:'text-red-500'  },
             ].map((s) => (
               <div key={s.label} className="card p-4">
                 <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">{s.label}</p>
                 <p className={['text-2xl font-bold mt-1', s.color].join(' ')}>{s.value}</p>
-                <p className={['text-[11px] mt-0.5', s.sub_color].join(' ')}>{s.sub}</p>
               </div>
             ))}
           </div>
@@ -140,27 +162,27 @@ const ReservationList = () => {
                   <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50/60 transition-colors cursor-pointer"
                     onClick={() => navigate(`${basePath}/reservations/${r.id}`)}>
                     <td className="px-4 py-3 align-top">
-                      <p className="font-bold text-navy-900 text-sm">#{r.id}</p>
+                      <p className="font-bold text-navy-900 text-sm">RES-{10000 + r.id}</p>
                       <p className="text-[11px] text-gray-400 mt-0.5">Booked: {r.bookedDate}</p>
                     </td>
                     <td className="px-4 py-3 align-top">
                       <div className="flex items-start gap-2">
-                        <Avatar name={r.guest.name} size="sm" />
+                        <Avatar name={r.customer?.name || '?'} size="sm" />
                         <div>
-                          <p className="font-semibold text-gray-800 text-xs">{r.guest.name}</p>
-                          <p className="text-[11px] text-gray-400">{r.guest.phone}</p>
-                          <p className="text-[11px] text-gray-400">{r.guest.email}</p>
+                          <p className="font-semibold text-gray-800 text-xs">{r.customer?.name}</p>
+                          <p className="text-[11px] text-gray-400">{r.customer?.phone}</p>
+                          <p className="text-[11px] text-gray-400">{r.customer?.email}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-4 py-3 align-top">
-                      <p className="font-semibold text-gray-800 text-xs">Room {r.room.number}</p>
-                      <p className="text-[11px] text-gray-400">{r.room.type}</p>
+                      <p className="font-semibold text-gray-800 text-xs">Room {r.room?.number}</p>
+                      <p className="text-[11px] text-gray-400">{r.room?.type}</p>
                     </td>
                     <td className="px-4 py-3 align-top text-xs text-gray-600">
                       <p>{r.checkIn}</p>
                       <p>— {r.checkOut}</p>
-                      <p className="text-[11px] text-gray-400 mt-0.5">{r.nights} Night{r.nights>1?'s':''} • {r.room.guests} Guest{r.room.guests>1?'s':''}</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5">{r.nights} Night{r.nights>1?'s':''}</p>
                     </td>
                     <td className="px-4 py-3 align-top">
                       <Badge variant={STATUS_VARIANT[r.status]||'gray'} dot size="sm">{r.status}</Badge>

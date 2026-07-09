@@ -1,18 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Search, SlidersHorizontal, ChevronLeft,
-  ChevronRight, BedDouble, X,
+  ChevronRight, BedDouble, X, Loader2,
 } from 'lucide-react';
 
 import DashboardLayout from '../../components/templates/DashboardLayout';
 import { useRole }     from '../../hooks/useRole';
 import { canRoom }     from '../../utils/roomPermissions';
-import {
-  ROOMS, ROOM_TYPES, ROOM_STATUSES, FLOOR_OPTIONS, STATUS_STYLE,
-} from '../../data/rooms';
+import { STATUS_STYLE, ROOM_TYPES, ROOM_STATUSES, FLOOR_OPTIONS } from '../../data/rooms';
+import { getRooms }    from '../../utils/api';
 
-/* ─── Stat card ─────────────────────────────────────────── */
+
 const Stat = ({ icon, label, value, color, sub }) => (
   <div className="card p-4 flex flex-col gap-1 min-w-0">
     <div className="flex items-center gap-2">
@@ -24,7 +23,7 @@ const Stat = ({ icon, label, value, color, sub }) => (
   </div>
 );
 
-/* ─── Status badge ───────────────────────────────────────── */
+
 const StatusBadge = ({ status }) => {
   const s = STATUS_STYLE[status] || STATUS_STYLE.Available;
   return (
@@ -38,24 +37,34 @@ const StatusBadge = ({ status }) => {
 const userNames = { admin:'Admin User', manager:'Alex Thompson', receptionist:'Sarah Mitchell', housekeeper:'Sarah' };
 const userRoles = { admin:'Super Administrator', manager:'Hotel Manager', receptionist:'Front Desk Lead', housekeeper:'Supervisor' };
 
-/* ─── Component ─────────────────────────────────────────── */
+
 const RoomList = () => {
   const navigate = useNavigate();
   const role = useRole();
   const basePath = `/${role}`;
 
+  const [rooms,       setRooms]       = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState('');
   const [search,      setSearch]      = useState('');
   const [typeFilter,  setTypeFilter]  = useState('All Types');
   const [statusFilter,setStatusFilter]= useState('All Status');
   const [floorFilter, setFloorFilter] = useState('All Floors');
   const [currentPage, setCurrentPage] = useState(1);
 
-  const filtered = ROOMS.filter((r) => {
+  useEffect(() => {
+    getRooms()
+      .then(data => setRooms(data))
+      .catch(() => setError('Failed to load rooms. Please ensure the backend is running.'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = rooms.filter((r) => {
     const q = search.toLowerCase();
     if (q && !r.number.includes(q) && !r.type.toLowerCase().includes(q)) return false;
-    if (typeFilter  !== 'All Types'  && r.type                 !== typeFilter)  return false;
-    if (statusFilter!== 'All Status' && r.status               !== statusFilter) return false;
-    if (floorFilter !== 'All Floors' && String(r.floor)        !== floorFilter)  return false;
+    if (typeFilter  !== 'All Types'  && r.type         !== typeFilter)  return false;
+    if (statusFilter!== 'All Status' && r.status        !== statusFilter) return false;
+    if (floorFilter !== 'All Floors' && String(r.floor) !== floorFilter)  return false;
     return true;
   });
 
@@ -65,13 +74,27 @@ const RoomList = () => {
   };
 
   const stats = [
-    { icon:'🏢', label:'Total',     value: ROOMS.length,                                  color:'text-gray-800', sub:'Inventory Units'       },
-    { icon:'✅', label:'Available', value: ROOMS.filter(r=>r.status==='Available').length,  color:'text-green-600',sub:'Ready for check-in'    },
-    { icon:'🔴', label:'Occupied',  value: ROOMS.filter(r=>r.status==='Occupied').length,   color:'text-orange-600',sub:'Active stays'          },
-    { icon:'📘', label:'Reserved',  value: ROOMS.filter(r=>r.status==='Reserved').length,   color:'text-blue-600', sub:'Future arrivals'       },
-    { icon:'🧹', label:'Cleaning',  value: ROOMS.filter(r=>r.status==='Cleaning').length,   color:'text-purple-600',sub:'Turnover in progress'  },
-    { icon:'🔧', label:'Down',      value: ROOMS.filter(r=>r.status==='Maintenance'||r.status==='Down').length, color:'text-red-600', sub:'Maintenance tickets' },
+    { icon:'🏢', label:'Total',     value: rooms.length,                                  color:'text-gray-800', sub:'Inventory Units'       },
+    { icon:'✅', label:'Available', value: rooms.filter(r=>r.status==='Available').length,  color:'text-green-600',sub:'Ready for check-in'    },
+    { icon:'🔴', label:'Occupied',  value: rooms.filter(r=>r.status==='Occupied').length,   color:'text-orange-600',sub:'Active stays'          },
+    { icon:'📘', label:'Reserved',  value: rooms.filter(r=>r.status==='Reserved').length,   color:'text-blue-600', sub:'Future arrivals'       },
+    { icon:'🧹', label:'Cleaning',  value: rooms.filter(r=>r.status==='Cleaning').length,   color:'text-purple-600',sub:'Turnover in progress'  },
+    { icon:'🔧', label:'Down',      value: rooms.filter(r=>r.status==='Maintenance'||r.status==='Down').length, color:'text-red-600', sub:'Maintenance tickets' },
   ];
+
+  if (loading) return (
+    <DashboardLayout role={role} userName={userNames[role]} userRole={userRoles[role]}>
+      <div className="flex items-center justify-center h-64 gap-3 text-gray-400">
+        <Loader2 className="w-6 h-6 animate-spin" /> Loading rooms...
+      </div>
+    </DashboardLayout>
+  );
+
+  if (error) return (
+    <DashboardLayout role={role} userName={userNames[role]} userRole={userRoles[role]}>
+      <div className="flex items-center justify-center h-64 text-red-500 text-sm">{error}</div>
+    </DashboardLayout>
+  );
 
   return (
     <DashboardLayout role={role} userName={userNames[role]} userRole={userRoles[role]} notificationCount={4}
@@ -90,7 +113,7 @@ const RoomList = () => {
         )}
       </div>
 
-      {/* Stats */}
+     
       <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-6">
         {stats.map((s) => <Stat key={s.label} {...s} />)}
       </div>

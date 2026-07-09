@@ -6,13 +6,16 @@ import com.hotelgrande.erp.entity.User;
 import com.hotelgrande.erp.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 
 @Service
 @RequiredArgsConstructor  // Lombok: generates constructor injecting all final fields
-public class UserService {
+public class UserService implements UserDetailsService {
 
     private final UserRepository  userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -59,5 +62,11 @@ public class UserService {
             case RECEPTIONIST -> "/receptionist";
             case HOUSEKEEPER  -> "/housekeeper";
         };
+    }
+
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        return userRepository.findByEmail(username)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + username));
     }
 }

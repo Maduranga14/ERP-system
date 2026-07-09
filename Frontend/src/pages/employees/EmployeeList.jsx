@@ -1,9 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Plus, RefreshCw, Eye, UserCog, Users,
   UserCheck, UserX, ChevronLeft, ChevronRight,
-  Filter, Briefcase, Clock, ShieldCheck,
+  Filter, Briefcase, Clock, ShieldCheck, Loader2,
 } from 'lucide-react';
 
 import DashboardLayout   from '../../components/templates/DashboardLayout';
@@ -11,12 +11,10 @@ import Badge             from '../../components/atoms/Badge';
 import Avatar            from '../../components/atoms/Avatar';
 import { useRole }       from '../../hooks/useRole';
 import { canEmployee }   from '../../utils/employeePermissions';
-import {
-  EMPLOYEES, EMPLOYEE_STATS,
-  DEPARTMENTS, EMP_STATUSES,
-} from '../../data/employees';
+import { DEPARTMENTS, EMP_STATUSES } from '../../data/employees';
+import { getEmployees }  from '../../utils/api';
 
-/* ── Helpers ───────────────────────────────────────────────── */
+
 const STATUS_VARIANT = {
   Active:    'green',
   'On Leave':'amber',
@@ -34,7 +32,7 @@ const userRoles = {
   admin: 'Super Administrator', manager: 'General Manager', receptionist: 'Front Desk Lead',
 };
 
-/* ── Stat Card ─────────────────────────────────────────────── */
+
 const StatCard = ({ icon, iconBg, label, value, badge, badgeVariant = 'green', sub }) => (
   <div className="card p-4 flex flex-col gap-1.5 hover:shadow-md transition-shadow">
     <div className="flex items-start justify-between">
@@ -56,7 +54,7 @@ const StatCard = ({ icon, iconBg, label, value, badge, badgeVariant = 'green', s
   </div>
 );
 
-/* ── Filter Select ─────────────────────────────────────────── */
+
 const FilterSelect = ({ icon, label, value, onChange, options }) => (
   <div className="flex items-center gap-1.5 border border-gray-200 rounded-lg px-3 py-2 bg-white hover:border-gray-300 transition-colors">
     {icon && <span className="text-gray-400">{icon}</span>}
@@ -71,33 +69,40 @@ const FilterSelect = ({ icon, label, value, onChange, options }) => (
   </div>
 );
 
-/* ── Main Component ────────────────────────────────────────── */
+
 const EmployeeList = () => {
   const navigate  = useNavigate();
   const role      = useRole();
   const basePath  = `/${role}`;
 
+  const [employees,    setEmployees]    = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState('');
   const [search,       setSearch]      = useState('');
   const [deptFilter,   setDeptFilter]  = useState('All');
   const [statusFilter, setStatusFilter]= useState('All');
   const [currentPage,  setCurrentPage] = useState(1);
 
-  /* filtering */
+  useEffect(() => {
+    getEmployees()
+      .then(data => setEmployees(data))
+      .catch(() => setError('Failed to load employees.'))
+      .finally(() => setLoading(false));
+  }, []);
+
+ 
   const filtered = useMemo(() => {
-    return EMPLOYEES.filter((e) => {
+    return employees.filter((e) => {
       const q = search.toLowerCase();
       if (q && !(
-        e.fullName.toLowerCase().includes(q) ||
-        e.email.toLowerCase().includes(q) ||
-        e.phone.includes(q) ||
-        e.id.toLowerCase().includes(q) ||
-        e.role.toLowerCase().includes(q)
+        e.fullName?.toLowerCase().includes(q) ||
+        e.email?.toLowerCase().includes(q) ||
+        String(e.id).includes(q) ||
+        e.role?.name?.toLowerCase().includes(q)
       )) return false;
-      if (deptFilter   !== 'All' && e.department !== deptFilter)   return false;
-      if (statusFilter !== 'All' && e.status     !== statusFilter) return false;
       return true;
     });
-  }, [search, deptFilter, statusFilter]);
+  }, [employees, search, deptFilter, statusFilter]);
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginated  = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
@@ -105,6 +110,20 @@ const EmployeeList = () => {
   const resetFilters = () => {
     setSearch(''); setDeptFilter('All'); setStatusFilter('All'); setCurrentPage(1);
   };
+
+  if (loading) return (
+    <DashboardLayout role={role} userName={userNames[role]} userRole={userRoles[role]}>
+      <div className="flex items-center justify-center h-64 gap-3 text-gray-400">
+        <Loader2 className="w-6 h-6 animate-spin" /> Loading employees...
+      </div>
+    </DashboardLayout>
+  );
+
+  if (error) return (
+    <DashboardLayout role={role} userName={userNames[role]} userRole={userRoles[role]}>
+      <div className="flex items-center justify-center h-64 text-red-500 text-sm">{error}</div>
+    </DashboardLayout>
+  );
 
   return (
     <DashboardLayout
@@ -114,12 +133,12 @@ const EmployeeList = () => {
       notificationCount={3}
       searchPlaceholder="Search employees, roles or ID..."
     >
-      {/* Breadcrumb */}
+     
       <p className="text-xs text-gray-400 mb-1">
         Dashboard &rsaquo; <span className="text-gray-600 font-medium">Employees</span>
       </p>
 
-      {/* Header */}
+      
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-2xl font-bold text-gray-900">Employee Management</h1>
         {canEmployee(role, 'create') && (
@@ -134,13 +153,13 @@ const EmployeeList = () => {
         )}
       </div>
 
-      {/* Stat Cards */}
+      
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
         <StatCard
           icon={<Users className="w-4 h-4 text-white" />}
           iconBg="bg-navy-900"
           label="Total Employees"
-          value={EMPLOYEE_STATS.totalEmployees}
+          value={employees.length}
           badge="Hotel Staff"
           badgeVariant="blue"
         />
@@ -148,31 +167,31 @@ const EmployeeList = () => {
           icon={<UserCheck className="w-4 h-4 text-green-600" />}
           iconBg="bg-green-100"
           label="Active Now"
-          value={EMPLOYEE_STATS.activeEmployees}
+          value={employees.filter(e=>e.enabled).length}
           sub="● On Duty"
         />
         <StatCard
           icon={<Clock className="w-4 h-4 text-amber-600" />}
           iconBg="bg-amber-100"
           label="On Leave"
-          value={EMPLOYEE_STATS.onLeave}
+          value={0}
           badge="Leave"
           badgeVariant="amber"
         />
         <StatCard
           icon={<UserCog className="w-4 h-4 text-blue-600" />}
           iconBg="bg-blue-100"
-          label="New This Month"
-          value={EMPLOYEE_STATS.newThisMonth}
-          badge="New"
+          label="System Roles"
+          value={[...new Set(employees.map(e=>e.role))].length}
+          badge="Roles"
           badgeVariant="green"
         />
       </div>
 
-      {/* Search + Filters */}
+      
       <div className="card p-3 mb-4 flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          {/* Search */}
+         
           <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 bg-white flex-1 min-w-[220px] focus-within:border-navy-400 transition-colors">
             <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
             <input
@@ -208,7 +227,7 @@ const EmployeeList = () => {
         </div>
       </div>
 
-      {/* Table */}
+      
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
           <thead>
@@ -236,15 +255,15 @@ const EmployeeList = () => {
                 className="border-b border-gray-50 hover:bg-slate-50/70 transition-colors cursor-pointer"
                 onClick={() => navigate(`${basePath}/employees/${emp.id}`)}
               >
-                {/* ID */}
+                
                 <td className="px-4 py-3 align-middle">
-                  <span className="font-bold text-navy-900 text-sm">{emp.id}</span>
+                  <span className="font-bold text-navy-900 text-sm">EMP-{String(emp.id).padStart(3,'0')}</span>
                 </td>
 
-                {/* Name */}
+                
                 <td className="px-4 py-3 align-middle">
                   <div className="flex items-center gap-2.5">
-                    <Avatar name={emp.fullName} size="sm" />
+                    <Avatar name={emp.fullName || '?'} size="sm" />
                     <div>
                       <p className="font-semibold text-gray-800 text-xs leading-tight">{emp.fullName}</p>
                       <p className="text-[11px] text-gray-400 mt-0.5">{emp.email}</p>
@@ -252,39 +271,39 @@ const EmployeeList = () => {
                   </div>
                 </td>
 
-                {/* Department */}
+                
                 <td className="px-4 py-3 align-middle">
                   <div className="flex items-center gap-1.5">
                     <Briefcase className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                    <span className="text-xs text-gray-700">{emp.department}</span>
+                    <span className="text-xs text-gray-700">{emp.department || emp.role?.toLowerCase?.() || '—'}</span>
                   </div>
                 </td>
 
-                {/* Role */}
+                
                 <td className="px-4 py-3 align-middle">
-                  <span className="text-xs text-gray-700">{emp.role}</span>
+                  <span className="text-xs text-gray-700 capitalize">{emp.role?.toLowerCase?.() || '—'}</span>
                 </td>
 
-                {/* Shift */}
+                
                 <td className="px-4 py-3 align-middle">
-                  <span className="text-[11px] text-gray-500">{emp.shift.split(' ')[0]}</span>
+                  <span className="text-[11px] text-gray-500">{emp.shift ? emp.shift.split(' ')[0] : '—'}</span>
                 </td>
 
-                {/* Status */}
+                
                 <td className="px-4 py-3 align-middle">
-                  <Badge variant={STATUS_VARIANT[emp.status] || 'gray'} dot size="sm">
-                    {emp.status}
+                  <Badge variant={emp.enabled ? 'green' : 'gray'} dot size="sm">
+                    {emp.enabled ? 'Active' : 'Inactive'}
                   </Badge>
                 </td>
 
-                {/* Account */}
+               
                 <td className="px-4 py-3 align-middle">
-                  <Badge variant={ACCOUNT_VARIANT[emp.accountStatus] || 'gray'} size="sm">
-                    {emp.accountStatus}
+                  <Badge variant={emp.enabled ? 'green' : 'red'} size="sm">
+                    {emp.enabled ? 'Active' : 'Disabled'}
                   </Badge>
                 </td>
 
-                {/* Actions */}
+                
                 <td className="px-4 py-3 align-middle" onClick={(e) => e.stopPropagation()}>
                   <button
                     id={`view-emp-${emp.id}`}
@@ -300,7 +319,7 @@ const EmployeeList = () => {
           </tbody>
         </table>
 
-        {/* Pagination */}
+        
         <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
           <p className="text-xs text-gray-400">
             Showing{' '}

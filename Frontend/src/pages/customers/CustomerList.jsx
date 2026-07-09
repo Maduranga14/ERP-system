@@ -1,9 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Plus, RefreshCw, Eye, Pencil, Trash2,
   Users, UserPlus, Activity, Repeat, AlertCircle,
-  ChevronLeft, ChevronRight, Filter, Globe, Star,
+  ChevronLeft, ChevronRight, Filter, Globe, Star, Loader2,
 } from 'lucide-react';
 
 import DashboardLayout  from '../../components/templates/DashboardLayout';
@@ -11,10 +11,8 @@ import Badge            from '../../components/atoms/Badge';
 import Avatar           from '../../components/atoms/Avatar';
 import { useRole }      from '../../hooks/useRole';
 import { canCustomer }  from '../../utils/permissions';
-import {
-  CUSTOMERS, CUSTOMER_STATS,
-  MEMBER_TIERS, STATUS_OPTIONS, COUNTRY_OPTIONS, FREQUENCY_OPTIONS,
-} from '../../data/customers';
+import { MEMBER_TIERS, STATUS_OPTIONS, COUNTRY_OPTIONS, FREQUENCY_OPTIONS } from '../../data/customers';
+import { getCustomers, deleteCustomer } from '../../utils/api';
 
 /* ── Helpers ───────────────────────────────────────────────── */
 const TIER_VARIANT = {
@@ -69,7 +67,7 @@ const StatCard = ({ icon, label, value, badge, badgeVariant = 'green', sub, subV
   </div>
 );
 
-/* ── Filter Select ─────────────────────────────────────────── */
+
 const FilterSelect = ({ icon, label, value, onChange, options }) => (
   <div className="flex items-center gap-1.5 border border-gray-200 rounded-lg px-3 py-2 bg-white hover:border-gray-300 transition-colors">
     {icon && <span className="text-gray-400">{icon}</span>}
@@ -84,37 +82,45 @@ const FilterSelect = ({ icon, label, value, onChange, options }) => (
   </div>
 );
 
-/* ── Main Component ────────────────────────────────────────── */
+
 const CustomerList = () => {
   const navigate   = useNavigate();
   const role       = useRole();
   const basePath   = `/${role}`;
 
+  const [customers,     setCustomers]    = useState([]);
+  const [loading,       setLoading]      = useState(true);
+  const [error,         setError]        = useState('');
   const [search,        setSearch]        = useState('');
   const [tierFilter,    setTierFilter]    = useState('All');
   const [statusFilter,  setStatusFilter]  = useState('All');
   const [countryFilter, setCountryFilter] = useState('All');
   const [freqFilter,    setFreqFilter]    = useState('All');
   const [currentPage,   setCurrentPage]   = useState(1);
-  const [deleteTarget,  setDeleteTarget]  = useState(null); // confirmation
+  const [deleteTarget,  setDeleteTarget]  = useState(null);
 
-  /* filtering */
+  useEffect(() => {
+    getCustomers()
+      .then(data => setCustomers(data))
+      .catch(() => setError('Failed to load customers.'))
+      .finally(() => setLoading(false));
+  }, []);
+
   const filtered = useMemo(() => {
-    return CUSTOMERS.filter((c) => {
+    return customers.filter((c) => {
       const q = search.toLowerCase();
       if (q && !(
         c.name.toLowerCase().includes(q) ||
-        c.email.toLowerCase().includes(q) ||
-        c.phone.includes(q) ||
-        c.id.toLowerCase().includes(q)
+        c.email?.toLowerCase().includes(q) ||
+        c.phone?.includes(q) ||
+        String(c.id).includes(q)
       )) return false;
       if (tierFilter    !== 'All' && c.memberTier !== tierFilter)    return false;
       if (statusFilter  !== 'All' && c.status     !== statusFilter)  return false;
       if (countryFilter !== 'All' && c.country    !== countryFilter) return false;
-      if (freqFilter    !== 'All' && c.frequency  !== freqFilter)    return false;
       return true;
     });
-  }, [search, tierFilter, statusFilter, countryFilter, freqFilter]);
+  }, [customers, search, tierFilter, statusFilter, countryFilter, freqFilter]);
 
   const totalPages  = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginated   = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
@@ -124,11 +130,33 @@ const CustomerList = () => {
     setCountryFilter('All'); setFreqFilter('All'); setCurrentPage(1);
   };
 
-  const handleDelete = (id) => {
-    // In a real app, call API then refetch
-    alert(`Customer ${id} deleted (mock).`);
+  const handleDelete = async (id) => {
+    await deleteCustomer(id);
+    setCustomers(prev => prev.filter(c => c.id !== id));
     setDeleteTarget(null);
   };
+
+  const CUSTOMER_STATS = {
+    totalCustomers: customers.length,
+    newCustomers: customers.filter(c => c.status === 'New').length,
+    activeGuests: customers.filter(c => c.status === 'Active').length,
+    repeatGuestsPercent: 0,
+    pendingPayments: 0
+  };
+
+  if (loading) return (
+    <DashboardLayout role={role} userName={userNames[role]} userRole={userRoles[role]}>
+      <div className="flex items-center justify-center h-64 gap-3 text-gray-400">
+        <Loader2 className="w-6 h-6 animate-spin" /> Loading customers...
+      </div>
+    </DashboardLayout>
+  );
+
+  if (error) return (
+    <DashboardLayout role={role} userName={userNames[role]} userRole={userRoles[role]}>
+      <div className="flex items-center justify-center h-64 text-red-500 text-sm">{error}</div>
+    </DashboardLayout>
+  );
 
   return (
     <DashboardLayout
@@ -138,12 +166,12 @@ const CustomerList = () => {
       notificationCount={3}
       searchPlaceholder="Search guests, rooms or booking ID..."
     >
-      {/* Breadcrumb */}
+      
       <p className="text-xs text-gray-400 mb-1">
         Dashboard &rsaquo; <span className="text-gray-600 font-medium">Customers</span>
       </p>
 
-      {/* Header */}
+      
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-2xl font-bold text-gray-900">Customer Management</h1>
         {canCustomer(role, 'create') && (
@@ -157,7 +185,7 @@ const CustomerList = () => {
         )}
       </div>
 
-      {/* Stat Cards */}
+      
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 mb-5">
         <StatCard
           icon={<Users className="w-4 h-4 text-slate-600" />}
@@ -196,7 +224,7 @@ const CustomerList = () => {
         />
       </div>
 
-      {/* Search + Filters */}
+      
       <div className="card p-3 mb-4 flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
           {/* Search */}
@@ -247,7 +275,7 @@ const CustomerList = () => {
         </div>
       </div>
 
-      {/* Table */}
+      
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
           <thead>
@@ -277,7 +305,7 @@ const CustomerList = () => {
               >
                 {/* Customer ID */}
                 <td className="px-4 py-3 align-middle">
-                  <span className="font-bold text-navy-900 text-sm">{c.id}</span>
+                  <span className="font-bold text-navy-900 text-sm">C-{String(c.id).padStart(3,'0')}</span>
                 </td>
 
                 {/* Guest Name + Tier */}
@@ -302,21 +330,21 @@ const CustomerList = () => {
                   <p className="text-xs text-gray-700">{c.country}</p>
                 </td>
 
-                {/* Bookings */}
+               
                 <td className="px-4 py-3 align-middle">
                   <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-navy-900 text-white text-xs font-bold">
-                    {c.bookingCount}
+                    {c.bookingCount ?? 0}
                   </span>
                 </td>
 
-                {/* Status */}
+               
                 <td className="px-4 py-3 align-middle">
                   <Badge variant={STATUS_VARIANT[c.status] || 'gray'} dot size="sm">
                     {c.status}
                   </Badge>
                 </td>
 
-                {/* Actions */}
+               
                 <td className="px-4 py-3 align-middle" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-2">
                     <button
@@ -351,7 +379,7 @@ const CustomerList = () => {
           </tbody>
         </table>
 
-        {/* Pagination */}
+       
         <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
           <p className="text-xs text-gray-400">
             Showing{' '}
@@ -402,7 +430,7 @@ const CustomerList = () => {
         </div>
       </div>
 
-      {/* Delete Confirmation Modal */}
+      
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4">

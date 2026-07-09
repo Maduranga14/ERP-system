@@ -43,7 +43,7 @@ const RecordPaymentModal = ({ invoice, onClose, onSave }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-        {/* Modal Header */}
+        
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center">
@@ -59,7 +59,7 @@ const RecordPaymentModal = ({ invoice, onClose, onSave }) => {
           </button>
         </div>
 
-        {/* Balance Due Banner */}
+       
         <div className="mx-6 mt-4 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 flex items-center justify-between">
           <div>
             <p className="text-xs text-amber-700 font-semibold uppercase tracking-wider">Balance Due</p>
@@ -72,7 +72,7 @@ const RecordPaymentModal = ({ invoice, onClose, onSave }) => {
           </div>
         </div>
 
-        {/* Form */}
+       
         <form onSubmit={handleSubmit} className="px-6 py-4 flex flex-col gap-4">
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1.5">Payment Amount</label>
