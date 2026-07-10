@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   ChevronRight, Plus, Trash2, FileText, User,
-  BedDouble, Save, X,
+  BedDouble, Save, X, Loader2
 } from 'lucide-react';
 
 import DashboardLayout from '../../components/templates/DashboardLayout';
 import { useRole }     from '../../hooks/useRole';
+import { getReservations, createInvoice } from '../../utils/api';
 
 const USER_NAMES = { admin: 'Admin User', manager: 'Alex Sterling', receptionist: 'Sarah Mitchell' };
 const USER_ROLES = { admin: 'Super Administrator', manager: 'General Manager', receptionist: 'Front Desk Lead' };
@@ -18,6 +19,12 @@ const GenerateInvoice = () => {
   const role     = useRole();
 
   const basePath = role === 'admin' ? '/admin' : role === 'manager' ? '/manager' : '/receptionist';
+
+  const [reservations, setReservations] = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState('');
+  const [submitting,    setSubmitting]    = useState(false);
+  const [submitted,     setSubmitted]     = useState(false);
 
   const [form, setForm] = useState({
     reservationId: '',
@@ -35,7 +42,68 @@ const GenerateInvoice = () => {
   });
 
   const [lineItems, setLineItems] = useState([{ ...EMPTY_ITEM }]);
-  const [submitted, setSubmitted] = useState(false);
+
+  useEffect(() => {
+    getReservations()
+      .then(data => setReservations(data))
+      .catch(err => {
+        console.error(err);
+        setError('Failed to load reservations.');
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleReservationChange = (resId) => {
+    const res = reservations.find(r => String(r.id) === String(resId));
+    if (!res) {
+      setForm(f => ({
+        ...f,
+        reservationId: '',
+        guestName: '',
+        guestPhone: '',
+        guestEmail: '',
+        roomNumber: '',
+        roomType: '',
+        checkIn: '',
+        checkOut: '',
+        discount: 0
+      }));
+      setLineItems([{ ...EMPTY_ITEM }]);
+      return;
+    }
+
+    setForm(f => ({
+      ...f,
+      reservationId: String(res.id),
+      guestName: res.customer?.name || '',
+      guestPhone: res.customer?.phone || '',
+      guestEmail: res.customer?.email || '',
+      roomNumber: res.room?.number || '',
+      roomType: res.room?.type || '',
+      checkIn: res.checkIn || '',
+      checkOut: res.checkOut || '',
+      discount: res.discount || 0
+    }));
+
+    const items = [];
+    const nights = res.nights || 1;
+    const rate = res.room?.pricePerNight || 0;
+    items.push({
+      description: `Room Charges (Room ${res.room?.number || '?'})`,
+      qty: nights,
+      unitPrice: rate
+    });
+
+    if (res.additionalServices && res.additionalServices > 0) {
+      items.push({
+        description: 'Additional Services / Amenities',
+        qty: 1,
+        unitPrice: res.additionalServices
+      });
+    }
+
+    setLineItems(items);
+  };
 
   /* ── Derived totals ── */
   const subtotal    = lineItems.reduce((sum, i) => sum + Number(i.qty) * Number(i.unitPrice), 0);
@@ -53,11 +121,62 @@ const GenerateInvoice = () => {
   const addItem    = () => setLineItems([...lineItems, { ...EMPTY_ITEM }]);
   const removeItem = (idx) => setLineItems(lineItems.filter((_, i) => i !== idx));
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setSubmitted(true);
-    setTimeout(() => navigate(`${basePath}/billing`), 1500);
+    if (!form.reservationId) {
+      setError("Please select a reservation.");
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+
+    try {
+      const payload = {
+        guestName: form.guestName,
+        email: form.guestEmail || null,
+        phone: form.guestPhone || '',
+        reservation: { id: Number(form.reservationId) },
+        checkIn: form.checkIn,
+        checkOut: form.checkOut,
+        nights: lineItems[0]?.description.includes('Room Charges') ? Number(lineItems[0].qty) : 1,
+        roomNumber: form.roomNumber,
+        roomType: form.roomType,
+        method: form.method,
+        status: 'Pending',
+        date: new Date().toISOString().split('T')[0],
+        subtotal: subtotal,
+        tax: tax,
+        discount: discount,
+        grandTotal: grandTotal,
+        amountPaid: 0.0,
+        notes: form.notes,
+        lineItems: lineItems.map(item => ({
+          description: item.description,
+          qty: Number(item.qty),
+          unitPrice: Number(item.unitPrice),
+          amount: Number(item.qty) * Number(item.unitPrice)
+        }))
+      };
+
+      await createInvoice(payload);
+      setSubmitted(true);
+      setTimeout(() => navigate(`${basePath}/billing`), 1500);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to generate invoice.");
+      setSubmitting(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <DashboardLayout role={role} userName={USER_NAMES[role]} userRole={USER_ROLES[role]}>
+        <div className="flex items-center justify-center h-64 gap-3 text-gray-400">
+          <Loader2 className="w-6 h-6 animate-spin" /> Loading reservations...
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout
@@ -89,6 +208,12 @@ const GenerateInvoice = () => {
         </button>
       </div>
 
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 flex items-center gap-2 text-sm text-red-700 font-medium">
+          {error}
+        </div>
+      )}
+
       {submitted && (
         <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-4 flex items-center gap-2 text-sm text-green-700 font-medium">
           Invoice generated successfully! Redirecting…
@@ -104,14 +229,19 @@ const GenerateInvoice = () => {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             <Field label="Reservation ID" required>
-              <input
+              <select
                 required
-                type="text"
                 value={form.reservationId}
-                onChange={(e) => setForm({ ...form, reservationId: e.target.value })}
-                placeholder="e.g. RES-1001"
-                className="input-style"
-              />
+                onChange={(e) => handleReservationChange(e.target.value)}
+                className="input-style bg-white"
+              >
+                <option value="">-- Select Reservation --</option>
+                {reservations.map((res) => (
+                  <option key={res.id} value={res.id}>
+                    RES-{10000 + res.id} ({res.customer?.name || 'Unknown'}) - {res.status}
+                  </option>
+                ))}
+              </select>
             </Field>
             <Field label="Guest Name" required>
               <input
@@ -340,10 +470,10 @@ const GenerateInvoice = () => {
             className="px-6 py-2.5 border border-gray-200 text-sm font-semibold text-gray-600 rounded-lg hover:bg-gray-50 transition-colors">
             Cancel
           </button>
-          <button type="submit"
-            className="px-6 py-2.5 bg-navy-900 text-white text-sm font-semibold rounded-lg hover:bg-navy-800 transition-colors flex items-center gap-2">
-            <Save className="w-4 h-4" />
-            Generate Invoice
+          <button type="submit" disabled={submitting}
+            className="px-6 py-2.5 bg-navy-900 text-white text-sm font-semibold rounded-lg hover:bg-navy-800 disabled:opacity-50 transition-colors flex items-center gap-2">
+            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {submitting ? 'Generating...' : 'Generate Invoice'}
           </button>
         </div>
       </form>

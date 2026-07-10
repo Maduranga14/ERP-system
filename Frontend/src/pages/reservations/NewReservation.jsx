@@ -145,6 +145,8 @@ const NewReservation = () => {
     setSubmitting(true);
     setSubmitError('');
     try {
+      const today = new Date().toISOString().split('T')[0];
+
       // 1. Check if guest already exists by email or phone
       const customers = await getCustomers();
       let customer = null;
@@ -157,7 +159,6 @@ const NewReservation = () => {
 
       // If guest does not exist, create on the fly
       if (!customer) {
-        const today = new Date().toISOString().split('T')[0];
         customer = await apiPost('/api/customers', {
           name:       guestName,
           email:      email || null,
@@ -171,17 +172,62 @@ const NewReservation = () => {
       }
 
       // 2. Create reservation
-      await apiPost('/api/reservations', {
+      const createdRes = await apiPost('/api/reservations', {
         customerId:      customer.id,
         roomId:          Number(selectedRoomId),
         checkIn:         checkIn || today,
         checkOut:        checkOut || today,
         status:          bookStatus,
-        payment:         'Pending',
-        discount,
+        payment:         deposit >= total ? 'Paid' : (deposit > 0 ? 'Partial' : 'Pending'),
+        roomCharges:     subtotal,
+        tax:             tax,
+        discount:        discount,
+        total:           total,
         discountCode:    promoCode,
         specialRequests: special,
       });
+
+      // 3. Create invoice and record payment if deposit > 0
+      if (deposit > 0) {
+        const invPayload = {
+          guestName: customer.name,
+          email: customer.email || null,
+          phone: customer.phone || '',
+          reservation: { id: createdRes.id },
+          checkIn: createdRes.checkIn,
+          checkOut: createdRes.checkOut,
+          nights: nights,
+          roomNumber: selectedRoom?.number || '',
+          roomType: selectedRoom?.type || '',
+          method: method,
+          status: 'Pending',
+          date: today,
+          subtotal: subtotal,
+          tax: tax,
+          discount: discount,
+          grandTotal: total,
+          amountPaid: 0.0,
+          notes: 'Invoice generated automatically upon reservation creation.',
+          lineItems: [
+            {
+              description: `Room Charges (Room ${selectedRoom?.number})`,
+              qty: nights,
+              unitPrice: rate,
+              amount: subtotal
+            }
+          ]
+        };
+        const createdInv = await apiPost('/api/billing', invPayload);
+
+        // Record the deposit payment transaction
+        const paymentPayload = {
+          method: method,
+          amount: Number(deposit),
+          date: today,
+          processedBy: userNames[role]
+        };
+        await apiPost(`/api/billing/${createdInv.id}/payments`, paymentPayload);
+      }
 
       navigate(`${basePath}/reservations`);
     } catch (err) {
