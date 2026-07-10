@@ -99,9 +99,11 @@ export const updateEmployee  = (id, e) => apiPut(`/api/employees/${id}`, e);
 export const deleteEmployee  = (id)    => apiDelete(`/api/employees/${id}`);
 
 
-export const getMaintenanceRequests = ()       => apiGet('/api/maintenance');
-export const getMaintenanceById     = (id)     => apiGet(`/api/maintenance/${id}`);
-export const createMaintenance      = (m)      => apiPost('/api/maintenance', m);
-export const updateMaintenance      = (id, m)  => apiPut(`/api/maintenance/${id}`, m);
-export const updateMaintenanceStatus = (id, s) => apiPut(`/api/maintenance/${id}/status?status=${encodeURIComponent(s)}`, {});
-export const deleteMaintenance      = (id)     => apiDelete(`/api/maintenance/${id}`);
+export const getMaintenanceRequests          = ()       => apiGet('/api/maintenance');
+export const getAvailableMaintenanceRequests = ()       => apiGet('/api/maintenance?status=Open');
+export const getMaintenanceById              = (id)     => apiGet(`/api/maintenance/${id}`);
+export const createMaintenance               = (m)      => apiPost('/api/maintenance', m);
+export const updateMaintenance               = (id, m)  => apiPut(`/api/maintenance/${id}`, m);
+export const updateMaintenanceStatus         = (id, s)  => apiPut(`/api/maintenance/${id}/status?status=${encodeURIComponent(s)}`, {});
+export const deleteMaintenance               = (id)     => apiDelete(`/api/maintenance/${id}`);
+export const assignMaintenanceTask           = (payload) => apiPost('/api/maintenance/assign', payload);
