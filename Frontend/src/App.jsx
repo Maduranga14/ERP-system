@@ -34,6 +34,7 @@ import AssignTask       from './pages/housekeeping/AssignTask';
 import BillingList      from './pages/billing/BillingList';
 import InvoiceDetail    from './pages/billing/InvoiceDetail';
 import GenerateInvoice  from './pages/billing/GenerateInvoice';
+import PrintInvoice     from './pages/billing/PrintInvoice';
 
 
 import EmployeeList   from './pages/employees/EmployeeList';
@@ -73,6 +74,7 @@ const App = () => (
       <Route path="/admin/billing"                  element={<BillingList />} />
       <Route path="/admin/billing/generate"         element={<GenerateInvoice />} />
       <Route path="/admin/billing/:id"              element={<InvoiceDetail />} />
+      <Route path="/admin/billing/:id/print"        element={<PrintInvoice />} />
       <Route path="/admin/employees"                element={<EmployeeList />} />
       <Route path="/admin/employees/new"            element={<AddEmployee />} />
       <Route path="/admin/employees/:id"            element={<EmployeeDetail />} />
@@ -100,6 +102,7 @@ const App = () => (
       <Route path="/manager/cleaning-history"       element={<CleaningHistoryPage />} />
       <Route path="/manager/billing"                element={<BillingList />} />
       <Route path="/manager/billing/:id"            element={<InvoiceDetail />} />
+      <Route path="/manager/billing/:id/print"      element={<PrintInvoice />} />
 
       
       <Route path="/receptionist"                   element={<ReceptionistDashboard />} />
@@ -118,6 +121,7 @@ const App = () => (
       <Route path="/receptionist/billing"           element={<BillingList />} />
       <Route path="/receptionist/billing/generate"  element={<GenerateInvoice />} />
       <Route path="/receptionist/billing/:id"       element={<InvoiceDetail />} />
+      <Route path="/receptionist/billing/:id/print" element={<PrintInvoice />} />
       <Route path="/receptionist/check-in"          element={<CheckInPage />} />
       <Route path="/receptionist/check-out"         element={<CheckOutPage />} />
 
