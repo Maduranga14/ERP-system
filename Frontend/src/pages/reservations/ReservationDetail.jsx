@@ -9,10 +9,11 @@ import {
 import DashboardLayout from '../../components/templates/DashboardLayout';
 import Badge from '../../components/atoms/Badge';
 import Button from '../../components/atoms/Button';
+import EditReservationDrawer from './EditReservationDrawer';
 import { useRole } from '../../hooks/useRole';
 import { can } from '../../utils/permissions';
 import {
-  getReservationById, updateReservation,
+  getReservationById, updateReservation, cancelReservation,
   checkIn as apiCheckIn, checkOut as apiCheckOut, deleteReservation,
   getRooms,
 } from '../../utils/api';
@@ -42,6 +43,7 @@ const ReservationDetail = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   const fetchReservation = () => {
     setLoading(true);
@@ -70,8 +72,12 @@ const ReservationDetail = () => {
   const handleCancel = async () => {
     if (!window.confirm('Are you sure you want to cancel this reservation?')) return;
     setActionLoading(true);
-    try { await deleteReservation(id); navigate(`${basePath}/reservations`); }
-    catch (err) { alert('Cancellation failed: ' + err.message); setActionLoading(false); }
+    try {
+      await cancelReservation(id);
+      fetchReservation();
+    }
+    catch (err) { alert('Cancellation failed: ' + err.message); }
+    finally { setActionLoading(false); }
   };
 
   if (loading) return (
@@ -130,7 +136,14 @@ const ReservationDetail = () => {
             <Button variant="outline" size="sm" icon={<Printer className="w-3.5 h-3.5" />}>Print Folio</Button>
             <Button variant="outline" size="sm" icon={<Send className="w-3.5 h-3.5" />}>Send Confirmation</Button>
             {can(role, 'edit') && (
-              <Button variant="primary" size="sm" icon={<Pencil className="w-3.5 h-3.5" />}>Edit</Button>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Pencil className="w-3.5 h-3.5" />}
+                onClick={() => setEditOpen(true)}
+              >
+                Edit
+              </Button>
             )}
           </div>
         </div>
@@ -339,6 +352,14 @@ const ReservationDetail = () => {
           </div>
         </div>
       </div>
+      {/* Edit Reservation Drawer */}
+      {editOpen && reservation && (
+        <EditReservationDrawer
+          reservation={reservation}
+          onClose={() => setEditOpen(false)}
+          onSaved={() => { fetchReservation(); setEditOpen(false); }}
+        />
+      )}
     </DashboardLayout>
   );
 };
