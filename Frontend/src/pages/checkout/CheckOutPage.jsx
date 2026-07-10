@@ -1,14 +1,14 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Search, LogOut, BedDouble, Calendar, Clock,
   Users, CheckCircle2, X, CreditCard, DollarSign,
-  ArrowLeft, Sparkles, FileText, AlertCircle,
+  ArrowLeft, Sparkles, FileText, AlertCircle, Loader2,
 } from 'lucide-react';
 
 import DashboardLayout from '../../components/templates/DashboardLayout';
 import Badge           from '../../components/atoms/Badge';
 import { useRole }     from '../../hooks/useRole';
-import { CURRENT_STAYS } from '../../data/checkinout';
+import { getReservations, getInvoices, checkOut, createHousekeepingTask, createInvoice, addPayment } from '../../utils/api';
 
 /* ── Constants ─────────────────────────────────────────────── */
 const USER_NAMES = { admin: 'Admin User', manager: 'Alex Sterling', receptionist: 'Sarah Mitchell' };
@@ -70,24 +70,110 @@ const CheckOutPage = () => {
   const role     = useRole();
 
   /* ── State ── */
+  const [reservations,  setReservations]  = useState([]);
+  const [invoices,      setInvoices]      = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState('');
+  const [submitting,    setSubmitting]    = useState(false);
   const [search,        setSearch]        = useState('');
-  const [selected,      setSelected]      = useState(null);
+  const [selectedId,    setSelectedId]    = useState(null);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [paymentNote,   setPaymentNote]   = useState('');
   const [paymentSaved,  setPaymentSaved]  = useState(false);
   const [successData,   setSuccessData]   = useState(null);
 
-  /* ── Derived ── */
+  const fetchData = () => {
+    setLoading(true);
+    Promise.all([
+      getReservations(),
+      getInvoices()
+    ])
+      .then(([resData, invData]) => {
+        setReservations(resData.filter(r => r.status === 'Checked In'));
+        setInvoices(invData);
+      })
+      .catch(err => {
+        console.error(err);
+        setError('Failed to load check-out data.');
+      })
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const stays = useMemo(() => {
+    return reservations.map(r => {
+      const inv = invoices.find(i => i.reservation?.id === r.id);
+      const initials = r.customer?.name
+        ? r.customer.name.split(' ').map(n => n[0]).join('').toUpperCase()
+        : '?';
+
+      if (inv) {
+        return {
+          id: `RES-${10000 + r.id}`,
+          rawId: r.id,
+          guest: { name: r.customer?.name || 'Unknown', initials },
+          room: { id: r.room?.id, number: r.room?.number || '?', type: r.room?.type || 'Standard' },
+          checkIn: r.checkIn,
+          checkOut: r.checkOut,
+          nights: r.nights || 1,
+          amountPaid: inv.amountPaid || 0,
+          tax: inv.tax || 0,
+          discount: -(inv.discount || 0),
+          invoiceId: inv.id,
+          charges: inv.lineItems?.map(item => ({ label: item.description, amount: item.amount })) || [
+            { label: 'Room Charges', amount: inv.subtotal }
+          ]
+        };
+      }
+
+      const nights = r.nights || 1;
+      const roomRate = r.room?.pricePerNight || 0;
+      const roomCharges = r.roomCharges || (nights * roomRate);
+      const subtotal = roomCharges;
+      const tax = r.tax || (subtotal * 0.1);
+      const discount = r.discount || 0;
+
+      const charges = [
+        { label: `Room Charges (${nights} Nights)`, amount: roomCharges }
+      ];
+      if (r.additionalServices && r.additionalServices > 0) {
+        charges.push({ label: 'Additional Services / Amenities', amount: r.additionalServices });
+      }
+
+      return {
+        id: `RES-${10000 + r.id}`,
+        rawId: r.id,
+        guest: { name: r.customer?.name || 'Unknown', initials },
+        room: { id: r.room?.id, number: r.room?.number || '?', type: r.room?.type || 'Standard' },
+        checkIn: r.checkIn,
+        checkOut: r.checkOut,
+        nights,
+        amountPaid: 0.0,
+        tax,
+        discount: -Math.abs(discount),
+        invoiceId: null,
+        charges
+      };
+    });
+  }, [reservations, invoices]);
+
+  const selected = useMemo(() => {
+    return stays.find(s => s.rawId === selectedId) || null;
+  }, [stays, selectedId]);
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    if (!q) return CURRENT_STAYS;
-    return CURRENT_STAYS.filter((s) =>
+    if (!q) return stays;
+    return stays.filter((s) =>
       s.id.toLowerCase().includes(q) ||
       s.guest.name.toLowerCase().includes(q) ||
       s.room.number.includes(q)
     );
-  }, [search]);
+  }, [search, stays]);
 
   const totalCharges = selected
     ? selected.charges.reduce((a, c) => a + c.amount, 0) + selected.tax + selected.discount
@@ -96,26 +182,162 @@ const CheckOutPage = () => {
 
   /* ── Handlers ── */
   const handleSelectStay = (stay) => {
-    setSelected(stay);
+    setSelectedId(stay.rawId);
     setPaymentAmount(Math.max(0, stay.charges.reduce((a, c) => a + c.amount, 0) + stay.tax + stay.discount - stay.amountPaid).toFixed(2));
     setPaymentSaved(false);
   };
 
-  const handleRecordPayment = () => {
-    setPaymentSaved(true);
-    alert(`Payment of $${paymentAmount} via ${paymentMethod} recorded (mock).`);
+  const handleRecordPayment = async () => {
+    if (!selected) return;
+    setSubmitting(true);
+    setPaymentSaved(false);
+    setError('');
+
+    try {
+      let invId = selected.invoiceId;
+      if (!invId) {
+        const originalRes = reservations.find(r => r.id === selected.rawId);
+        const invPayload = {
+          guestName: selected.guest.name,
+          email: originalRes?.customer?.email || null,
+          phone: originalRes?.customer?.phone || '',
+          reservation: { id: selected.rawId },
+          checkIn: selected.checkIn,
+          checkOut: selected.checkOut,
+          nights: selected.nights,
+          roomNumber: selected.room.number,
+          roomType: selected.room.type,
+          method: paymentMethod,
+          status: 'Pending',
+          date: new Date().toISOString().split('T')[0],
+          subtotal: selected.charges.reduce((a, c) => a + c.amount, 0),
+          tax: selected.tax,
+          discount: Math.abs(selected.discount),
+          grandTotal: totalCharges,
+          amountPaid: 0.0,
+          notes: 'Generated during check-out.',
+          lineItems: selected.charges.map(c => ({
+            description: c.label,
+            qty: 1,
+            unitPrice: c.amount,
+            amount: c.amount
+          }))
+        };
+        const createdInv = await createInvoice(invPayload);
+        invId = createdInv.id;
+      }
+
+      const paymentPayload = {
+        method: paymentMethod,
+        amount: Number(paymentAmount),
+        date: new Date().toISOString().split('T')[0],
+        processedBy: USER_NAMES[role]
+      };
+      await addPayment(invId, paymentPayload);
+
+      setPaymentSaved(true);
+      
+      const [resData, invData] = await Promise.all([
+        getReservations(),
+        getInvoices()
+      ]);
+      setReservations(resData.filter(r => r.status === 'Checked In'));
+      setInvoices(invData);
+
+      // Recalculate the remaining balance and update the paymentAmount input field
+      const refreshedInv = invData.find(i => i.reservation?.id === selected.rawId);
+      const refreshedPaid = refreshedInv ? (refreshedInv.amountPaid || 0) : 0;
+      const refreshedBalance = Math.max(0, totalCharges - refreshedPaid);
+      setPaymentAmount(refreshedBalance.toFixed(2));
+    } catch (err) {
+      console.error(err);
+      setError("Failed to record payment.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleCheckOut = () => {
-    const invoiceId = `INV-${Math.floor(Math.random() * 9000 + 1000)}`;
-    setSuccessData({ stay: selected, invoiceId });
+  const handleCheckOut = async () => {
+    if (!selected) return;
+    setSubmitting(true);
+    setError('');
+
+    try {
+      await checkOut(selected.rawId);
+
+      const housekeepingPayload = {
+        room: { id: selected.room.id },
+        priority: 'Medium',
+        notes: 'Checkout room cleaning',
+        checklist: [
+          { label: 'Strip and change bed linens', done: false },
+          { label: 'Clean and sanitize bathroom', done: false },
+          { label: 'Dust all surfaces and furniture', done: false },
+          { label: 'Vacuum carpets and sweep floors', done: false },
+          { label: 'Replenish towels and amenities', done: false },
+          { label: 'Check mini-bar and electronics', done: false }
+        ]
+      };
+      await createHousekeepingTask(housekeepingPayload);
+
+      let finalInvoiceId = selected.invoiceId;
+      if (!finalInvoiceId) {
+        const originalRes = reservations.find(r => r.id === selected.rawId);
+        const invPayload = {
+          guestName: selected.guest.name,
+          email: originalRes?.customer?.email || null,
+          phone: originalRes?.customer?.phone || '',
+          reservation: { id: selected.rawId },
+          checkIn: selected.checkIn,
+          checkOut: selected.checkOut,
+          nights: selected.nights,
+          roomNumber: selected.room.number,
+          roomType: selected.room.type,
+          method: paymentMethod || 'Cash',
+          status: balance <= 0 ? 'Paid' : 'Pending',
+          date: new Date().toISOString().split('T')[0],
+          subtotal: selected.charges.reduce((a, c) => a + c.amount, 0),
+          tax: selected.tax,
+          discount: Math.abs(selected.discount),
+          grandTotal: totalCharges,
+          amountPaid: selected.amountPaid,
+          notes: 'Generated during check-out.',
+          lineItems: selected.charges.map(c => ({
+            description: c.label,
+            qty: 1,
+            unitPrice: c.amount,
+            amount: c.amount
+          }))
+        };
+        const createdInv = await createInvoice(invPayload);
+        finalInvoiceId = createdInv.id;
+      }
+
+      setSuccessData({ stay: selected, invoiceId: `INV-${String(finalInvoiceId).padStart(3, '0')}` });
+    } catch (err) {
+      console.error(err);
+      setError("Failed to complete check-out.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleDone = () => {
     setSuccessData(null);
-    setSelected(null);
+    setSelectedId(null);
     setSearch('');
+    fetchData();
   };
+
+  if (loading) {
+    return (
+      <DashboardLayout role={role} userName={USER_NAMES[role]} userRole={USER_ROLES[role]}>
+        <div className="flex items-center justify-center h-64 gap-3 text-gray-400">
+          <Loader2 className="w-6 h-6 animate-spin" /> Loading check-out information...
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   /* ── CURRENT STAYS LIST ── */
   if (!selected) {
@@ -144,12 +366,18 @@ const CheckOutPage = () => {
           </div>
         </div>
 
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 flex items-center gap-2 text-sm text-red-700 font-medium">
+            {error}
+          </div>
+        )}
+
         {/* Stats */}
         <div className="grid grid-cols-3 gap-3 mb-5">
           {[
-            { label: 'Currently Staying', value: CURRENT_STAYS.length,     icon: <Users className="w-4 h-4 text-navy-600" />,  bg: 'bg-slate-100', val: 'text-navy-800' },
-            { label: "Today's Departures", value: 2,                       icon: <LogOut className="w-4 h-4 text-blue-600" />,  bg: 'bg-blue-50',  val: 'text-blue-700' },
-            { label: 'Late Check-Outs',    value: 1,                       icon: <AlertCircle className="w-4 h-4 text-red-500" />, bg: 'bg-red-50', val: 'text-red-600' },
+            { label: 'Currently Staying', value: stays.length,     icon: <Users className="w-4 h-4 text-navy-600" />,  bg: 'bg-slate-100', val: 'text-navy-800' },
+            { label: "Today's Departures", value: stays.length,     icon: <LogOut className="w-4 h-4 text-blue-600" />,  bg: 'bg-blue-50',  val: 'text-blue-700' },
+            { label: 'Late Check-Outs',    value: 0,               icon: <AlertCircle className="w-4 h-4 text-red-500" />, bg: 'bg-red-50', val: 'text-red-600' },
           ].map((s) => (
             <div key={s.label} className="card p-4 flex items-center gap-3">
               <div className={`w-9 h-9 rounded-xl ${s.bg} flex items-center justify-center flex-shrink-0`}>
@@ -269,7 +497,7 @@ const CheckOutPage = () => {
     >
       {/* Back */}
       <button
-        onClick={() => setSelected(null)}
+        onClick={() => setSelectedId(null)}
         className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-navy-800 transition-colors mb-4 font-medium"
       >
         <ArrowLeft className="w-4 h-4" />
@@ -284,6 +512,12 @@ const CheckOutPage = () => {
         </div>
         <Badge variant="blue" dot>Checked In</Badge>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 flex items-center gap-2 text-sm text-red-700 font-medium">
+          {error}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
@@ -340,20 +574,24 @@ const CheckOutPage = () => {
 
           {/* 3. Payment */}
           <SectionCard title="Payment" icon={<CreditCard className="w-4 h-4" />} accent>
-            {/* Already paid summary */}
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              <div className="bg-slate-50 rounded-xl p-3 text-center">
-                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Total Bill</p>
-                <p className="text-lg font-bold text-gray-900 mt-0.5">${totalCharges.toLocaleString()}</p>
+            {/* Payment Summary Stats Grid */}
+            <div className="grid grid-cols-4 gap-2 mb-4 bg-slate-50 border border-gray-150 rounded-xl p-3">
+              <div className="text-center">
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Total Amount</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">${totalCharges.toFixed(2)}</p>
               </div>
-              <div className="bg-green-50 rounded-xl p-3 text-center">
-                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Amount Paid</p>
-                <p className="text-lg font-bold text-green-700 mt-0.5">${selected.amountPaid.toLocaleString()}</p>
+              <div className="text-center border-l border-gray-200 px-1">
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Paid Amount</p>
+                <p className="text-sm font-bold text-green-600 mt-0.5">${selected.amountPaid.toFixed(2)}</p>
               </div>
-              <div className={`rounded-xl p-3 text-center ${balance > 0 ? 'bg-amber-50' : 'bg-green-50'}`}>
-                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Balance Due</p>
-                <p className={`text-lg font-bold mt-0.5 ${balance > 0 ? 'text-amber-700' : 'text-green-700'}`}>
-                  ${Math.max(0, balance).toLocaleString()}
+              <div className="text-center border-l border-gray-200 px-1">
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Amount to Pay</p>
+                <p className="text-sm font-bold text-blue-600 mt-0.5">${Number(paymentAmount || 0).toFixed(2)}</p>
+              </div>
+              <div className="text-center border-l border-gray-200 px-1">
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Balance</p>
+                <p className={`text-sm font-bold mt-0.5 ${Math.max(0, balance - Number(paymentAmount || 0)) > 0.005 ? 'text-amber-600' : 'text-green-600'}`}>
+                  ${Math.max(0, balance - Number(paymentAmount || 0)).toFixed(2)}
                 </p>
               </div>
             </div>
@@ -402,9 +640,10 @@ const CheckOutPage = () => {
                 <button
                   id="record-payment-btn"
                   onClick={handleRecordPayment}
-                  className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+                  disabled={submitting}
+                  className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
-                  <CreditCard className="w-4 h-4" />
+                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
                   Record Payment
                 </button>
               </div>
@@ -442,7 +681,7 @@ const CheckOutPage = () => {
               </div>
               <div>
                 <p className="font-bold text-gray-900 text-sm">{selected.guest.name}</p>
-                <p className="text-xs text-gray-400">{selected.guests} Guest{selected.guests > 1 ? 's' : ''}</p>
+                <p className="text-xs text-gray-400">{selected.nights} Nights Stay</p>
               </div>
             </div>
             <div className="space-y-1.5 text-xs text-gray-500">
@@ -457,14 +696,21 @@ const CheckOutPage = () => {
           <button
             id="complete-checkout-btn"
             onClick={handleCheckOut}
-            className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl transition-colors shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2"
+            disabled={submitting || balance > 0.005}
+            className="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 disabled:opacity-75 disabled:cursor-not-allowed text-white font-bold text-sm rounded-xl transition-colors shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2"
           >
-            <LogOut className="w-5 h-5" />
-            Complete Check-Out
+            {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogOut className="w-5 h-5" />}
+            {submitting ? 'Checking Out...' : 'Complete Check-Out'}
           </button>
-          <p className="text-[11px] text-center text-gray-400 -mt-2">
-            This will finalize the stay and generate an invoice
-          </p>
+          {balance > 0.005 ? (
+            <p className="text-[11px] text-center text-red-500 font-semibold -mt-2">
+              Please settle the outstanding balance of ${balance.toFixed(2)} to enable check-out
+            </p>
+          ) : (
+            <p className="text-[11px] text-center text-gray-400 -mt-2">
+              This will finalize the stay and complete check-out
+            </p>
+          )}
         </div>
       </div>
 

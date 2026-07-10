@@ -1,19 +1,17 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, UserCheck, BedDouble, Clock, Calendar,
   Users, Phone, Mail, Shield, AlertCircle,
   CheckCircle2, ChevronRight, ArrowLeft, Home,
   X, CreditCard, DollarSign, MessageSquare,
-  Star, Layers,
+  Star, Layers, Loader2,
 } from 'lucide-react';
 
 import DashboardLayout from '../../components/templates/DashboardLayout';
 import Badge           from '../../components/atoms/Badge';
 import { useRole }     from '../../hooks/useRole';
-import {
-  TODAYS_ARRIVALS, AVAILABLE_ROOMS_FOR_CHECKIN,
-} from '../../data/checkinout';
+import { getReservations, getInvoices, getRooms, updateReservation, checkIn, createInvoice, addPayment } from '../../utils/api';
 
 /* ── Constants ─────────────────────────────────────────────── */
 const USER_NAMES = { admin: 'Admin User', manager: 'Alex Sterling', receptionist: 'Sarah Mitchell' };
@@ -77,35 +75,124 @@ const CheckInPage = () => {
   const basePath = `/${role}`;
 
   /* ── State ── */
-  const [search,       setSearch]       = useState('');
-  const [selected,     setSelected]     = useState(null);   // selected reservation
-  const [assignedRoom, setAssignedRoom] = useState(null);   // picked room number
-  const [verification, setVerification] = useState({ nationalId: '', phone: '', email: '', emergency: '' });
-  const [depositModal, setDepositModal] = useState(false);
-  const [depositAmt,   setDepositAmt]   = useState('');
-  const [depositMethod,setDepositMethod]= useState('Cash');
-  const [successRes,   setSuccessRes]   = useState(null);   // checked-in res for success screen
+  const [reservations,  setReservations]  = useState([]);
+  const [invoices,      setInvoices]      = useState([]);
+  const [rooms,         setRooms]         = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState('');
+  const [submitting,    setSubmitting]    = useState(false);
+  const [search,        setSearch]        = useState('');
+  const [selectedId,    setSelectedId]    = useState(null);
+  const [assignedRoom,  setAssignedRoom]  = useState(null);
+  const [verification,  setVerification]  = useState({ nationalId: '', phone: '', email: '', emergency: '' });
+  const [depositModal,  setDepositModal]  = useState(false);
+  const [depositAmt,    setDepositAmt]    = useState('');
+  const [depositMethod, setDepositMethod] = useState('Cash');
+  const [successRes,    setSuccessRes]    = useState(null);
 
-  /* ── Derived ── */
+  const fetchData = () => {
+    setLoading(true);
+    Promise.all([
+      getReservations(),
+      getInvoices(),
+      getRooms()
+    ])
+      .then(([resData, invData, roomData]) => {
+        setReservations(resData.filter(r => r.status === 'Confirmed' || r.status === 'Pending'));
+        setInvoices(invData);
+        setRooms(roomData);
+      })
+      .catch(err => {
+        console.error(err);
+        setError('Failed to load check-in data.');
+      })
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const stays = useMemo(() => {
+    return reservations.map(r => {
+      const inv = invoices.find(i => i.reservation?.id === r.id);
+      const initials = r.customer?.name
+        ? r.customer.name.split(' ').map(n => n[0]).join('').toUpperCase()
+        : '?';
+
+      const nights = r.nights || 1;
+      const roomRate = r.room?.pricePerNight || 0;
+      const roomCharges = r.roomCharges || (nights * roomRate);
+      const subtotal = roomCharges;
+      const tax = r.tax || (subtotal * 0.1);
+      const discount = r.discount || 0;
+
+      return {
+        id: `RES-${10000 + r.id}`,
+        rawId: r.id,
+        guest: {
+          name: r.customer?.name || 'Unknown',
+          initials,
+          phone: r.customer?.phone || '',
+          email: r.customer?.email || '',
+          nationalId: r.customer?.nationalId || '',
+          emergencyContact: ''
+        },
+        room: {
+          id: r.room?.id,
+          number: r.room?.number || '',
+          type: r.room?.type || 'Standard',
+          floor: r.room?.floor || 1,
+          pricePerNight: roomRate
+        },
+        guests: 1,
+        checkIn: r.checkIn,
+        checkOut: r.checkOut,
+        nights,
+        status: r.status,
+        totalAmount: roomCharges,
+        depositPaid: inv ? inv.amountPaid : 0.0,
+        tax,
+        discount: -Math.abs(discount),
+        roomRate,
+        invoiceId: inv ? inv.id : null,
+        specialRequests: r.specialRequests || ''
+      };
+    });
+  }, [reservations, invoices]);
+
+  const selected = useMemo(() => {
+    return stays.find(s => s.rawId === selectedId) || null;
+  }, [stays, selectedId]);
+
+  const availableRooms = useMemo(() => {
+    if (!selected) return [];
+    const sameType = rooms.filter(rm => rm.status === 'Available' && rm.type === selected.room.type);
+    if (sameType.length > 0) return sameType;
+    return rooms.filter(rm => rm.status === 'Available');
+  }, [rooms, selected]);
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    if (!q) return TODAYS_ARRIVALS;
-    return TODAYS_ARRIVALS.filter((r) =>
-      r.id.toLowerCase().includes(q) ||
-      r.guest.name.toLowerCase().includes(q) ||
-      r.guest.phone.includes(q)
+    if (!q) return stays;
+    return stays.filter((s) =>
+      s.id.toLowerCase().includes(q) ||
+      s.guest.name.toLowerCase().includes(q) ||
+      s.guest.phone.includes(q)
     );
-  }, [search]);
+  }, [search, stays]);
 
-  const stats = {
-    total:     TODAYS_ARRIVALS.length,
-    confirmed: TODAYS_ARRIVALS.filter((r) => r.status === 'Confirmed').length,
-    pending:   TODAYS_ARRIVALS.filter((r) => r.status === 'Pending').length,
-  };
+  const stats = useMemo(() => {
+    return {
+      total:     stays.length,
+      confirmed: stays.filter((r) => r.status === 'Confirmed').length,
+      pending:   stays.filter((r) => r.status === 'Pending').length,
+    };
+  }, [stays]);
 
   /* ── Handlers ── */
   const handleSelectReservation = (res) => {
-    setSelected(res);
+    setSelectedId(res.rawId);
     setAssignedRoom(res.room.number || null);
     setVerification({
       nationalId: res.guest.nationalId || '',
@@ -115,22 +202,119 @@ const CheckInPage = () => {
     });
   };
 
-  const handleCheckIn = () => {
+  const handleCheckIn = async () => {
     if (!assignedRoom) { alert('Please assign a room before checking in.'); return; }
-    const finalRes = {
-      ...selected,
-      room: { ...selected.room, number: assignedRoom, status: 'Occupied' },
-    };
-    setSuccessRes(finalRes);
+    setSubmitting(true);
+    setError('');
+
+    try {
+      const originalRes = reservations.find(r => r.id === selectedId);
+      const chosenRoom = rooms.find(rm => rm.number === assignedRoom);
+
+      if (originalRes.room?.id !== chosenRoom?.id) {
+        const updatePayload = {
+          ...originalRes,
+          room: { id: chosenRoom.id }
+        };
+        await updateReservation(selectedId, updatePayload);
+      }
+
+      await checkIn(selectedId);
+      
+      const finalRes = {
+        id: `RES-${10000 + selectedId}`,
+        guest: { name: originalRes.customer?.name || 'Unknown' },
+        room: { number: assignedRoom }
+      };
+      setSuccessRes(finalRes);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to complete check-in.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRecordDeposit = async () => {
+    if (!selected) return;
+    setSubmitting(true);
+    setError('');
+
+    try {
+      let invId = selected.invoiceId;
+      if (!invId) {
+        const originalRes = reservations.find(r => r.id === selected.rawId);
+        const invPayload = {
+          guestName: selected.guest.name,
+          email: originalRes?.customer?.email || null,
+          phone: originalRes?.customer?.phone || '',
+          reservation: { id: selected.rawId },
+          checkIn: selected.checkIn,
+          checkOut: selected.checkOut,
+          nights: selected.nights,
+          roomNumber: selected.room.number,
+          roomType: selected.room.type,
+          method: depositMethod,
+          status: 'Pending',
+          date: new Date().toISOString().split('T')[0],
+          subtotal: selected.totalAmount,
+          tax: selected.tax,
+          discount: Math.abs(selected.discount),
+          grandTotal: selected.totalAmount + selected.tax - Math.abs(selected.discount),
+          amountPaid: 0.0,
+          notes: 'Deposit paid during check-in.',
+          lineItems: [
+            { description: `Room Charges (Room ${selected.room.number})`, qty: selected.nights, unitPrice: selected.roomRate, amount: selected.totalAmount }
+          ]
+        };
+        const createdInv = await createInvoice(invPayload);
+        invId = createdInv.id;
+      }
+
+      const paymentPayload = {
+        method: depositMethod,
+        amount: Number(depositAmt),
+        date: new Date().toISOString().split('T')[0],
+        processedBy: USER_NAMES[role]
+      };
+      await addPayment(invId, paymentPayload);
+
+      setDepositModal(false);
+      setDepositAmt('');
+      
+      const [resData, invData] = await Promise.all([
+        getReservations(),
+        getInvoices()
+      ]);
+      setReservations(resData.filter(r => r.status === 'Confirmed' || r.status === 'Pending'));
+      setInvoices(invData);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to record deposit.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleDone = () => {
     setSuccessRes(null);
-    setSelected(null);
+    setSelectedId(null);
     setSearch('');
+    fetchData();
   };
 
-  const balance = selected ? (selected.totalAmount - selected.depositPaid) : 0;
+  const grandTotal = selected ? (selected.totalAmount + selected.tax + selected.discount) : 0;
+  const balance = selected ? (grandTotal - selected.depositPaid) : 0;
+
+  if (loading) {
+    return (
+      <DashboardLayout role={role} userName={USER_NAMES[role]} userRole={USER_ROLES[role]}>
+        <div className="flex items-center justify-center h-64 gap-3 text-gray-400">
+          <Loader2 className="w-6 h-6 animate-spin" /> Loading check-in arrivals...
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   /* ── ARRIVALS LIST VIEW ── */
   if (!selected) {
@@ -359,7 +543,7 @@ const CheckInPage = () => {
                   No room assigned. Please select an available room below.
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {AVAILABLE_ROOMS_FOR_CHECKIN.map((room) => (
+                  {availableRooms.map((room) => (
                     <button
                       key={room.number}
                       onClick={() => setAssignedRoom(room.number)}
@@ -455,11 +639,11 @@ const CheckInPage = () => {
             <div className="space-y-3 mb-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-white/60">Total Amount</span>
-                <span className="text-sm font-bold">${selected.totalAmount.toLocaleString()}</span>
+                <span className="text-sm font-bold">${grandTotal.toFixed(2)}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-white/60">Deposit Paid</span>
-                <span className="text-sm font-bold text-green-400">${selected.depositPaid.toLocaleString()}</span>
+                <span className="text-sm font-bold text-green-400">${selected.depositPaid.toFixed(2)}</span>
               </div>
               <div className="pt-3 border-t border-white/10 flex items-center justify-between">
                 <span className="text-xs font-semibold text-white/80">Balance Due</span>
@@ -520,15 +704,15 @@ const CheckInPage = () => {
           <button
             id="complete-checkin-btn"
             onClick={handleCheckIn}
-            disabled={!assignedRoom || !verification.nationalId || !verification.phone}
+            disabled={submitting || !assignedRoom || !verification.nationalId || !verification.phone}
             className="w-full py-4 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm rounded-xl transition-colors shadow-lg shadow-green-900/20 flex items-center justify-center gap-2"
           >
-            <UserCheck className="w-5 h-5" />
-            Complete Check-In
+            {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <UserCheck className="w-5 h-5" />}
+            {submitting ? 'Checking In...' : 'Complete Check-In'}
           </button>
-          {(!assignedRoom || !verification.nationalId || !verification.phone) && (
+          {(submitting || !assignedRoom || !verification.nationalId || !verification.phone) && (
             <p className="text-[11px] text-center text-gray-400 -mt-2">
-              Assign a room, verify ID &amp; contact to enable check-in
+              {submitting ? 'Please wait...' : 'Assign a room, verify ID & contact to enable check-in'}
             </p>
           )}
         </div>
@@ -550,6 +734,22 @@ const CheckInPage = () => {
               </button>
             </div>
             <div className="space-y-4">
+              {/* Payment Summary Stats */}
+              <div className="grid grid-cols-3 gap-2 bg-slate-50 border border-gray-100 rounded-xl p-3">
+                <div className="text-center">
+                  <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Total Amount</p>
+                  <p className="text-xs font-bold text-gray-800 mt-0.5">${(selected.totalAmount + selected.tax + selected.discount).toFixed(2)}</p>
+                </div>
+                <div className="text-center border-l border-r border-gray-200 px-1">
+                  <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Total Paid</p>
+                  <p className="text-xs font-bold text-green-600 mt-0.5">${selected.depositPaid.toFixed(2)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Balance</p>
+                  <p className="text-xs font-bold text-amber-600 mt-0.5">${balance.toFixed(2)}</p>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">Amount</label>
                 <div className="relative">
@@ -581,9 +781,11 @@ const CheckInPage = () => {
                   Cancel
                 </button>
                 <button
-                  onClick={() => { alert(`Deposit of $${depositAmt} recorded (mock).`); setDepositModal(false); }}
-                  className="flex-1 py-2.5 bg-navy-900 text-white text-sm font-semibold rounded-xl hover:bg-navy-800 transition-colors"
+                  onClick={handleRecordDeposit}
+                  disabled={submitting || !depositAmt}
+                  className="flex-1 py-2.5 bg-navy-900 hover:bg-navy-800 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5"
                 >
+                  {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                   Record
                 </button>
               </div>

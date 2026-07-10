@@ -1,17 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import {
   Printer, Mail, Download, CreditCard, ChevronRight,
   Phone, User, MapPin, Calendar, Moon, BedDouble,
   CheckCircle2, AlertCircle, Clock, RotateCcw, MinusCircle,
-  X, DollarSign,
+  X, DollarSign, Loader2,
 } from 'lucide-react';
 
 import DashboardLayout  from '../../components/templates/DashboardLayout';
 import Badge            from '../../components/atoms/Badge';
 import { useRole }      from '../../hooks/useRole';
 import { canBilling }   from '../../utils/billingPermissions';
-import { INVOICES }     from '../../data/billing';
+import { getInvoiceById, addPayment } from '../../utils/api';
 
 /* ─── Status config ───────────────────────────────────────────────────────── */
 const STATUS_CONFIG = {
@@ -60,15 +60,19 @@ const RecordPaymentModal = ({ invoice, onClose, onSave }) => {
         </div>
 
        
-        <div className="mx-6 mt-4 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 flex items-center justify-between">
-          <div>
-            <p className="text-xs text-amber-700 font-semibold uppercase tracking-wider">Balance Due</p>
-            <p className="text-2xl font-bold text-amber-800">${balance.toFixed(2)}</p>
+        {/* Payment Summary Stats Grid */}
+        <div className="mx-6 mt-4 grid grid-cols-3 gap-2 bg-slate-50 border border-gray-100 rounded-xl p-3">
+          <div className="text-center">
+            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Total Amount</p>
+            <p className="text-xs font-bold text-gray-800 mt-0.5">${invoice.grandTotal.toFixed(2)}</p>
           </div>
-          <div className="text-right">
-            <p className="text-xs text-gray-500">Total</p>
-            <p className="text-sm font-semibold text-gray-700">${invoice.grandTotal.toFixed(2)}</p>
-            <p className="text-xs text-green-600">Paid ${invoice.amountPaid.toFixed(2)}</p>
+          <div className="text-center border-l border-r border-gray-200 px-1">
+            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Total Paid</p>
+            <p className="text-xs font-bold text-green-600 mt-0.5">${invoice.amountPaid.toFixed(2)}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Balance Due</p>
+            <p className="text-xs font-bold text-amber-600 mt-0.5">${balance.toFixed(2)}</p>
           </div>
         </div>
 
@@ -139,20 +143,69 @@ const InvoiceDetail = () => {
   const navigate     = useNavigate();
   const role         = useRole();
 
+  const [invoice,      setInvoice]      = useState(null);
+  const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState('');
   const [showPayModal, setShowPayModal] = useState(false);
   const [paymentSaved, setPaymentSaved] = useState(false);
+  const [submitting,   setSubmitting]   = useState(false);
 
-  const basePath = role === 'admin' ? '/admin' : role === 'manager' ? '/manager' : '/receptionist';
-  const invoice  = INVOICES.find((inv) => inv.id === id) || INVOICES[0];
-  const balance  = invoice.grandTotal - invoice.amountPaid;
-
-  const handleSavePayment = (form) => {
-    // In production this would call an API
-    setShowPayModal(false);
-    setPaymentSaved(true);
+  const fetchInvoice = () => {
+    getInvoiceById(id)
+      .then(data => setInvoice(data))
+      .catch(err => {
+        console.error(err);
+        setError('Invoice not found or database is offline.');
+      })
+      .finally(() => setLoading(false));
   };
 
+  useEffect(() => {
+    fetchInvoice();
+  }, [id]);
+
+  const handleSavePayment = async (form) => {
+    setSubmitting(true);
+    setPaymentSaved(false);
+    try {
+      const paymentPayload = {
+        method: form.method,
+        amount: Number(form.amount),
+        date: new Date().toISOString().split('T')[0],
+        processedBy: USER_NAMES[role]
+      };
+      await addPayment(id, paymentPayload);
+      setPaymentSaved(true);
+      setShowPayModal(false);
+      fetchInvoice();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to record payment.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const basePath = role === 'admin' ? '/admin' : role === 'manager' ? '/manager' : '/receptionist';
+
+  if (loading) return (
+    <DashboardLayout role={role} userName={USER_NAMES[role]} userRole={USER_ROLES[role]}>
+      <div className="flex items-center justify-center h-64 gap-3 text-gray-400">
+        <Loader2 className="w-6 h-6 animate-spin" /> Loading invoice details...
+      </div>
+    </DashboardLayout>
+  );
+
+  if (error || !invoice) return (
+    <DashboardLayout role={role} userName={USER_NAMES[role]} userRole={USER_ROLES[role]}>
+      <div className="flex items-center justify-center h-64 text-red-500 font-semibold">{error || 'Invoice not found.'}</div>
+    </DashboardLayout>
+  );
+
+  const balance = invoice.grandTotal - invoice.amountPaid;
   const statusCfg = STATUS_CONFIG[invoice.status] || STATUS_CONFIG.Pending;
+  const invoiceCode = "INV-" + String(invoice.id).padStart(3, '0');
+  const reservationCode = invoice.reservation ? "RES-" + (10000 + invoice.reservation.id) : '—';
 
   return (
     <DashboardLayout
@@ -173,7 +226,7 @@ const InvoiceDetail = () => {
 
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-        <h1 className="text-2xl font-bold text-gray-900">Invoice Details – {invoice.id}</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Invoice Details – {invoiceCode}</h1>
         <div className="flex flex-wrap gap-2">
           {canBilling(role, 'printInvoice') && (
             <button
@@ -239,7 +292,7 @@ const InvoiceDetail = () => {
               {invoice.status.toUpperCase()}
             </Badge>
             <p className="text-xs text-gray-400 mt-2 uppercase tracking-wider font-semibold">Invoice No.</p>
-            <p className="text-sm font-bold text-navy-900">{invoice.id}-2023</p>
+            <p className="text-sm font-bold text-navy-900">{invoiceCode}</p>
             <p className="text-xs text-gray-400 mt-1 uppercase tracking-wider font-semibold">Date</p>
             <p className="text-sm text-gray-700 font-medium">{invoice.date}</p>
           </div>
@@ -250,23 +303,27 @@ const InvoiceDetail = () => {
           {/* Guest */}
           <div>
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Guest Details</p>
-            <p className="font-bold text-gray-900 text-base mb-1">{invoice.guest.name}</p>
-            <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
-              <Phone className="w-3.5 h-3.5" />
-              {invoice.guest.phone}
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-3">
-              <Mail className="w-3.5 h-3.5" />
-              {invoice.guest.email}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+            <p className="font-bold text-gray-900 text-base mb-1">{invoice.guestName}</p>
+            {invoice.phone && (
+              <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
+                <Phone className="w-3.5 h-3.5" />
+                {invoice.phone}
+              </div>
+            )}
+            {invoice.email && (
+              <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-3">
+                <Mail className="w-3.5 h-3.5" />
+                {invoice.email}
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3 mt-3">
               <div>
                 <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Reservation ID</p>
-                <p className="text-sm font-bold text-amber-700 mt-0.5">{invoice.reservationId}</p>
+                <p className="text-sm font-bold text-amber-700 mt-0.5">{reservationCode}</p>
               </div>
               <div>
                 <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Room</p>
-                <p className="text-sm font-bold text-amber-700 mt-0.5">{invoice.room.number} – {invoice.room.type}</p>
+                <p className="text-sm font-bold text-amber-700 mt-0.5">{invoice.roomNumber} – {invoice.roomType}</p>
               </div>
             </div>
           </div>
@@ -297,7 +354,7 @@ const InvoiceDetail = () => {
                 <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold flex items-center gap-1">
                   <BedDouble className="w-3 h-3" /> Room Type
                 </p>
-                <p className="text-sm font-semibold text-gray-800 mt-0.5">{invoice.room.type}</p>
+                <p className="text-sm font-semibold text-gray-800 mt-0.5">{invoice.roomType}</p>
               </div>
             </div>
           </div>

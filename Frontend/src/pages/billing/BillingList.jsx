@@ -363,7 +363,7 @@ const BillingList = () => {
             >
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>
-            {[1, 2, 3].map((p) => (
+            {Array.from({ length: totalPages || 1 }, (_, i) => i + 1).map((p) => (
               <button
                 key={p}
                 onClick={() => setCurrentPage(p)}
@@ -377,16 +377,10 @@ const BillingList = () => {
                 {p}
               </button>
             ))}
-            <span className="text-xs text-gray-400 px-1">...</span>
             <button
-              onClick={() => setCurrentPage(250)}
-              className="w-7 h-7 rounded-lg border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50"
-            >
-              250
-            </button>
-            <button
-              onClick={() => setCurrentPage((p) => Math.min(250, p + 1))}
-              className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-gray-50"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages || 1, p + 1))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-gray-50 disabled:opacity-40"
             >
               <ChevronRight className="w-3.5 h-3.5" />
             </button>

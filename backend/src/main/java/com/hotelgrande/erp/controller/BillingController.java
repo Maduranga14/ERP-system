@@ -2,9 +2,13 @@ package com.hotelgrande.erp.controller;
 
 import com.hotelgrande.erp.entity.Invoice;
 import com.hotelgrande.erp.entity.InvoicePayment;
+import com.hotelgrande.erp.entity.User;
+import com.hotelgrande.erp.enums.Role;
 import com.hotelgrande.erp.repository.InvoiceRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,19 +22,28 @@ public class BillingController {
     private final InvoiceRepository invoiceRepository;
 
     @GetMapping
-    public ResponseEntity<List<Invoice>> getAllInvoices() {
+    public ResponseEntity<?> getAllInvoices(@AuthenticationPrincipal User currentUser) {
+        if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.MANAGER && currentUser.getRole() != Role.RECEPTIONIST) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied.");
+        }
         return ResponseEntity.ok(invoiceRepository.findAll());
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Invoice> getInvoiceById(@PathVariable Long id) {
+    public ResponseEntity<?> getInvoiceById(@PathVariable Long id, @AuthenticationPrincipal User currentUser) {
+        if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.MANAGER && currentUser.getRole() != Role.RECEPTIONIST) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied.");
+        }
         return invoiceRepository.findById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping
-    public ResponseEntity<Invoice> createInvoice(@RequestBody Invoice invoice) {
+    public ResponseEntity<?> createInvoice(@RequestBody Invoice invoice, @AuthenticationPrincipal User currentUser) {
+        if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.RECEPTIONIST) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied.");
+        }
         if (invoice.getLineItems() != null) {
             invoice.getLineItems().forEach(item -> item.setInvoice(invoice));
         }
@@ -41,7 +54,13 @@ public class BillingController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Invoice> updateInvoice(@PathVariable Long id, @RequestBody Invoice details) {
+    public ResponseEntity<?> updateInvoice(
+            @PathVariable Long id,
+            @RequestBody Invoice details,
+            @AuthenticationPrincipal User currentUser) {
+        if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.RECEPTIONIST) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied.");
+        }
         return invoiceRepository.findById(id)
                 .map(invoice -> {
                     invoice.setGuestName(details.getGuestName());
@@ -85,7 +104,13 @@ public class BillingController {
     }
 
     @PostMapping("/{id}/payments")
-    public ResponseEntity<Invoice> addPayment(@PathVariable Long id, @RequestBody InvoicePayment payment) {
+    public ResponseEntity<?> addPayment(
+            @PathVariable Long id,
+            @RequestBody InvoicePayment payment,
+            @AuthenticationPrincipal User currentUser) {
+        if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.RECEPTIONIST) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied.");
+        }
         return invoiceRepository.findById(id)
                 .map(invoice -> {
                     payment.setInvoice(invoice);
@@ -93,8 +118,14 @@ public class BillingController {
                     invoice.setAmountPaid(invoice.getAmountPaid() + payment.getAmount());
                     if (invoice.getAmountPaid() >= invoice.getGrandTotal()) {
                         invoice.setStatus("Paid");
+                        if (invoice.getReservation() != null) {
+                            invoice.getReservation().setPayment("Paid");
+                        }
                     } else if (invoice.getAmountPaid() > 0) {
                         invoice.setStatus("Partial");
+                        if (invoice.getReservation() != null) {
+                            invoice.getReservation().setPayment("Partial");
+                        }
                     }
                     return ResponseEntity.ok(invoiceRepository.save(invoice));
                 })
@@ -102,11 +133,14 @@ public class BillingController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteInvoice(@PathVariable Long id) {
+    public ResponseEntity<?> deleteInvoice(@PathVariable Long id, @AuthenticationPrincipal User currentUser) {
+        if (currentUser.getRole() != Role.ADMIN) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied.");
+        }
         return invoiceRepository.findById(id)
                 .map(invoice -> {
                     invoiceRepository.delete(invoice);
-                    return ResponseEntity.ok().<Void>build();
+                    return ResponseEntity.ok().build();
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
