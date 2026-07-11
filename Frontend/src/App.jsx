@@ -49,6 +49,7 @@ import CheckOutPage from './pages/checkout/CheckOutPage';
 
 import MaintenancePage    from './pages/maintenance/MaintenancePage';
 import CleaningHistoryPage from './pages/cleaning/CleaningHistoryPage';
+import SettingsPage        from './pages/settings/SettingsPage';
 
 const App = () => (
   <BrowserRouter>
@@ -83,6 +84,7 @@ const App = () => (
       <Route path="/admin/check-out"                element={<CheckOutPage />} />
       <Route path="/admin/maintenance"              element={<MaintenancePage />} />
       <Route path="/admin/cleaning-history"         element={<CleaningHistoryPage />} />
+      <Route path="/admin/settings"                 element={<SettingsPage />} />
 
       
       <Route path="/manager"                        element={<ManagerDashboard />} />
@@ -103,6 +105,7 @@ const App = () => (
       <Route path="/manager/billing"                element={<BillingList />} />
       <Route path="/manager/billing/:id"            element={<InvoiceDetail />} />
       <Route path="/manager/billing/:id/print"      element={<PrintInvoice />} />
+      <Route path="/manager/settings"               element={<SettingsPage />} />
 
       
       <Route path="/receptionist"                   element={<ReceptionistDashboard />} />
@@ -124,6 +127,7 @@ const App = () => (
       <Route path="/receptionist/billing/:id/print" element={<PrintInvoice />} />
       <Route path="/receptionist/check-in"          element={<CheckInPage />} />
       <Route path="/receptionist/check-out"         element={<CheckOutPage />} />
+      <Route path="/receptionist/settings"          element={<SettingsPage />} />
 
       
       <Route path="/housekeeper"                    element={<HousekeeperDashboard />} />
@@ -133,6 +137,7 @@ const App = () => (
       <Route path="/housekeeper/housekeeping/:id"   element={<TaskDetail />} />
       <Route path="/housekeeper/maintenance"        element={<MaintenancePage />} />
       <Route path="/housekeeper/history"            element={<CleaningHistoryPage />} />
+      <Route path="/housekeeper/settings"           element={<SettingsPage />} />
 
     
       <Route path="*" element={<Navigate to="/" replace />} />
