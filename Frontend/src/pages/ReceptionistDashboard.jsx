@@ -175,6 +175,17 @@ const ReceptionistDashboard = () => {
       });
   }, [reservations, invoices]);
 
+  const handlePrintDailyReport = () => {
+    const date = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    const win = window.open('', '_blank', 'width=900,height=700');
+    const arrivalsRows = todaysReservations.map(r => `<tr><td>${r.guest}</td><td>${r.room}</td><td>${r.checkIn}</td><td>${r.nights} night${r.nights !== 1 ? 's' : ''}</td><td>${r.status}</td></tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:#9ca3af">No arrivals today</td></tr>';
+    const checkoutsRows = todaysCheckouts.map(r => `<tr><td>${r.guest}</td><td>${r.room}</td><td>${r.checkOut}</td><td>${r.payment}</td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:#9ca3af">No check-outs today</td></tr>';
+    win.document.write(`<!DOCTYPE html><html><head><title>Daily Report</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Inter,system-ui,sans-serif;font-size:13px;color:#1f2937;padding:36px}h1{font-size:20px;font-weight:700;color:#0D2137}.subtitle{font-size:12px;color:#6b7280;margin-top:4px;margin-bottom:28px}.hotel{font-size:11px;color:#9ca3af;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em}h2{font-size:13px;font-weight:700;color:#0D2137;margin-bottom:10px;margin-top:24px;padding-bottom:6px;border-bottom:2px solid #e5e7eb}table{width:100%;border-collapse:collapse;margin-bottom:8px}th{text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;color:#9ca3af;padding:8px 10px;border-bottom:1px solid #e5e7eb}td{padding:9px 10px;font-size:12px;color:#374151;border-bottom:1px solid #f3f4f6}.footer{margin-top:32px;padding-top:12px;border-top:1px solid #e5e7eb;font-size:10px;color:#9ca3af;display:flex;justify-content:space-between}</style></head><body><div class="hotel">Hotel Grande Resort</div><h1>Daily Front Desk Report</h1><p class="subtitle">${date} · Prepared by: ${loggedInName}</p><h2>Today's Arrivals</h2><table><thead><tr><th>Guest</th><th>Room</th><th>Check-In</th><th>Nights</th><th>Status</th></tr></thead><tbody>${arrivalsRows}</tbody></table><h2>Today's Check-Outs</h2><table><thead><tr><th>Guest</th><th>Room</th><th>Check-Out</th><th>Payment</th></tr></thead><tbody>${checkoutsRows}</tbody></table><div class="footer"><span>Hotel Grande Resort · Front Desk Daily Report</span><span>Printed: ${new Date().toLocaleString()}</span></div></body></html>`);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); win.close(); }, 400);
+  };
+
   if (loading) return (
     <DashboardLayout role="receptionist" userName={loggedInName} userRole="Front Desk Lead">
       <div className="flex items-center justify-center h-64 gap-3 text-gray-400">
@@ -192,7 +203,7 @@ const ReceptionistDashboard = () => {
       searchPlaceholder="Search guests, rooms, or reservations..."
       topBarActions={
         <div className="flex gap-2">
-          <Button onClick={() => window.print()} variant="outline" size="sm" icon={<Printer className="w-3.5 h-3.5" />}>Print Daily Report</Button>
+          <Button onClick={handlePrintDailyReport} variant="outline" size="sm" icon={<Printer className="w-3.5 h-3.5" />}>Print Daily Report</Button>
           <Button onClick={fetchData} variant="primary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />}>Refresh Stats</Button>
         </div>
       }
@@ -218,7 +229,7 @@ const ReceptionistDashboard = () => {
             <QuickActionCard onClick={() => navigate('/receptionist/check-out')} icon={<ArrowUpFromLine className="w-5 h-5" />} label="Check Out Guest" />
             <QuickActionCard onClick={() => navigate('/receptionist/reservations/new')} icon={<UserPlus className="w-5 h-5" />} label="New Booking" />
             <QuickActionCard onClick={() => navigate('/receptionist/reservations')} icon={<Search className="w-5 h-5" />} label="Search Booking" />
-            <QuickActionCard onClick={() => navigate('/receptionist/billing/new')} icon={<FileText className="w-5 h-5" />} label="Generate Invoice" />
+            <QuickActionCard onClick={() => navigate('/receptionist/billing/generate')} icon={<FileText className="w-5 h-5" />} label="Generate Invoice" />
           </div>
 
           <div className="card">
