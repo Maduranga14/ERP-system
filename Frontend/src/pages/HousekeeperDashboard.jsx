@@ -16,6 +16,9 @@ import ProgressBar from '../components/atoms/ProgressBar';
 import { getRooms, getHousekeepingTasks, getMaintenanceRequests, updateTaskStatus } from '../utils/api';
 
 const HousekeeperDashboard = () => {
+  const loggedInName = (() => {
+    try { return JSON.parse(localStorage.getItem('userInfo') || '{}').fullName || 'Sarah'; } catch { return 'Sarah'; }
+  })();
   const [rooms, setRooms] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [maintenance, setMaintenance] = useState([]);
@@ -165,7 +168,7 @@ const HousekeeperDashboard = () => {
   }, [tasks]);
 
   if (loading) return (
-    <DashboardLayout role="housekeeper" userName="Sarah" userRole="Supervisor">
+    <DashboardLayout role="housekeeper" userName={loggedInName} userRole="Supervisor">
       <div className="flex items-center justify-center h-64 gap-3 text-gray-400">
         <Loader2 className="w-6 h-6 animate-spin" /> Loading housekeeper supervisor dashboard...
       </div>
@@ -175,7 +178,7 @@ const HousekeeperDashboard = () => {
   return (
     <DashboardLayout
       role="housekeeper"
-      userName="Sarah"
+      userName={loggedInName}
       userRole="Supervisor"
       notificationCount={2}
       searchPlaceholder="Search rooms, tasks, or maintenance..."
@@ -185,7 +188,7 @@ const HousekeeperDashboard = () => {
     >
       <div className="flex items-start justify-between mb-5">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Good Morning, Sarah 👋</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Good Morning, {loggedInName} 👋</h1>
           <p className="text-sm text-gray-400 mt-0.5">Shift supervisor overview</p>
         </div>
       </div>

@@ -23,6 +23,9 @@ const resvStatusVariant = { Confirmed: 'green', 'Checked In': 'blue', Pending: '
 
 const ReceptionistDashboard = () => {
   const navigate = useNavigate();
+  const loggedInName = (() => {
+    try { return JSON.parse(localStorage.getItem('userInfo') || '{}').fullName || 'Sarah'; } catch { return 'Sarah'; }
+  })();
 
   const [rooms, setRooms] = useState([]);
   const [reservations, setReservations] = useState([]);
@@ -173,7 +176,7 @@ const ReceptionistDashboard = () => {
   }, [reservations, invoices]);
 
   if (loading) return (
-    <DashboardLayout role="receptionist" userName="Sarah Mitchell" userRole="Front Desk Lead">
+    <DashboardLayout role="receptionist" userName={loggedInName} userRole="Front Desk Lead">
       <div className="flex items-center justify-center h-64 gap-3 text-gray-400">
         <Loader2 className="w-6 h-6 animate-spin" /> Loading receptionist dashboard...
       </div>
@@ -183,7 +186,7 @@ const ReceptionistDashboard = () => {
   return (
     <DashboardLayout
       role="receptionist"
-      userName="Sarah Mitchell"
+      userName={loggedInName}
       userRole="Front Desk Lead"
       notificationCount={7}
       searchPlaceholder="Search guests, rooms, or reservations..."
@@ -195,7 +198,7 @@ const ReceptionistDashboard = () => {
       }
     >
       <div className="mb-5">
-        <h1 className="text-2xl font-bold text-gray-900">Good Morning, Sarah 👋</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Good Morning, {loggedInName} 👋</h1>
         <p className="text-sm text-gray-400 mt-0.5">{todayFormatted}</p>
       </div>
 
