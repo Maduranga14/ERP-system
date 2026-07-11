@@ -18,7 +18,7 @@ public class CustomerController {
 
     @GetMapping
     public ResponseEntity<List<Customer>> getAllCustomers() {
-        return ResponseEntity.ok(customerRepository.findAll());
+        return ResponseEntity.ok(customerRepository.findAllByOrderByIdDesc());
     }
 
     @GetMapping("/{id}")

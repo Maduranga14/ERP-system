@@ -22,7 +22,7 @@ public class ReservationController {
 
     @GetMapping
     public ResponseEntity<List<Reservation>> getAllReservations() {
-        return ResponseEntity.ok(reservationRepository.findAll());
+        return ResponseEntity.ok(reservationRepository.findAllByOrderByIdDesc());
     }
 
     @GetMapping("/{id}")
@@ -45,6 +45,16 @@ public class ReservationController {
 
             String checkIn  = (String) body.getOrDefault("checkIn", "");
             String checkOut = (String) body.getOrDefault("checkOut", "");
+
+            if (checkIn.isBlank() || checkOut.isBlank()) {
+                return ResponseEntity.badRequest().body("Check-in and check-out dates are required.");
+            }
+
+            List<Reservation> overlapping = reservationRepository.findOverlappingReservations(roomId, checkIn, checkOut);
+            if (!overlapping.isEmpty()) {
+                return ResponseEntity.badRequest().body("Room is already booked for the selected dates.");
+            }
+
             int nights = 0;
             try {
                 java.time.LocalDate ci = java.time.LocalDate.parse(checkIn);
@@ -109,6 +119,25 @@ public class ReservationController {
                         // ── Dates & auto-calculated nights ────────────────────
                         String checkIn  = body.containsKey("checkIn")  ? (String) body.get("checkIn")  : reservation.getCheckIn();
                         String checkOut = body.containsKey("checkOut") ? (String) body.get("checkOut") : reservation.getCheckOut();
+
+                        if (checkIn == null || checkIn.isBlank() || checkOut == null || checkOut.isBlank()) {
+                            throw new RuntimeException("Check-in and check-out dates are required.");
+                        }
+
+                        String newStatus = body.containsKey("status") ? (String) body.get("status") : reservation.getStatus();
+                        boolean isActiveStatus = newStatus != null &&
+                                !newStatus.equalsIgnoreCase("Cancelled") &&
+                                !newStatus.equalsIgnoreCase("Checked Out");
+
+                        if (isActiveStatus) {
+                            List<Reservation> overlapping = reservationRepository.findOverlappingReservationsExcludeId(
+                                    reservation.getRoom().getId(), checkIn, checkOut, reservation.getId()
+                            );
+                            if (!overlapping.isEmpty()) {
+                                throw new RuntimeException("Room is already booked for the selected dates.");
+                            }
+                        }
+
                         reservation.setCheckIn(checkIn);
                         reservation.setCheckOut(checkOut);
 

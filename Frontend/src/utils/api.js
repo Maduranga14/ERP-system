@@ -7,12 +7,36 @@ const authHeader = () => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
+const handleResponseError = async (res, method, path) => {
+  let errorMsg = `${method} ${path} failed: ${res.status}`;
+  try {
+    const text = await res.text();
+    if (text) {
+      try {
+        const json = JSON.parse(text);
+        if (json.message) {
+          errorMsg = json.message;
+        } else if (json.error) {
+          errorMsg = json.error;
+        } else {
+          errorMsg = text;
+        }
+      } catch {
+        errorMsg = text;
+      }
+    }
+  } catch {}
+  return new Error(errorMsg);
+};
+
 
 export const apiGet = async (path) => {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { 'Content-Type': 'application/json', ...authHeader() },
   });
-  if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`);
+  if (!res.ok) {
+    throw await handleResponseError(res, 'GET', path);
+  }
   return res.json();
 };
 
@@ -23,7 +47,9 @@ export const apiPost = async (path, body) => {
     headers: { 'Content-Type': 'application/json', ...authHeader() },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`POST ${path} failed: ${res.status}`);
+  if (!res.ok) {
+    throw await handleResponseError(res, 'POST', path);
+  }
   return res.json();
 };
 
@@ -34,7 +60,9 @@ export const apiPut = async (path, body) => {
     headers: { 'Content-Type': 'application/json', ...authHeader() },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`PUT ${path} failed: ${res.status}`);
+  if (!res.ok) {
+    throw await handleResponseError(res, 'PUT', path);
+  }
   return res.json();
 };
 
@@ -44,7 +72,9 @@ export const apiDelete = async (path) => {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json', ...authHeader() },
   });
-  if (!res.ok) throw new Error(`DELETE ${path} failed: ${res.status}`);
+  if (!res.ok) {
+    throw await handleResponseError(res, 'DELETE', path);
+  }
   return res.ok;
 };
 

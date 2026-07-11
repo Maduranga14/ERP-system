@@ -10,4 +10,5 @@ import java.util.List;
 @Repository
 public interface HousekeepingTaskRepository extends JpaRepository<HousekeepingTask, Long> {
     List<HousekeepingTask> findByHousekeeper(User housekeeper);
+    List<HousekeepingTask> findAllByOrderByIdDesc();
 }

@@ -31,7 +31,7 @@ public class HousekeepingController {
         if (currentUser.getRole() == null) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied.");
         }
-        return ResponseEntity.ok(housekeepingTaskRepository.findAll());
+        return ResponseEntity.ok(housekeepingTaskRepository.findAllByOrderByIdDesc());
     }
 
     @GetMapping("/{id}")

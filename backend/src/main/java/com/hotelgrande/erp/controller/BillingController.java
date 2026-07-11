@@ -26,7 +26,7 @@ public class BillingController {
         if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.MANAGER && currentUser.getRole() != Role.RECEPTIONIST) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied.");
         }
-        return ResponseEntity.ok(invoiceRepository.findAll());
+        return ResponseEntity.ok(invoiceRepository.findAllByOrderByIdDesc());
     }
 
     @GetMapping("/{id}")
