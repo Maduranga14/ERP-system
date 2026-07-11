@@ -8,6 +8,7 @@ import {
 
 import DashboardLayout from '../../components/templates/DashboardLayout';
 import { useRole }     from '../../hooks/useRole';
+import { useTheme }    from '../../context/ThemeContext';
 
 /* ── helpers ── */
 const loadUser = () => {
@@ -30,7 +31,7 @@ const Toggle = ({ checked, onChange }) => (
     onClick={() => onChange(!checked)}
     className={[
       'relative w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none flex-shrink-0',
-      checked ? 'bg-gold-500' : 'bg-gray-200',
+      checked ? 'bg-gold-500' : 'bg-gray-200 dark:bg-slate-600',
     ].join(' ')}
   >
     <span className={[
@@ -153,7 +154,7 @@ const SettingsPage = () => {
     org:      'Hospitality Elite',
   });
 
-  const [theme,    setTheme]    = useState('light');
+  const { theme, setTheme } = useTheme();
   const [language, setLanguage] = useState('en-US');
   const [twoFA,    setTwoFA]    = useState(true);
   const [notif, setNotif] = useState({

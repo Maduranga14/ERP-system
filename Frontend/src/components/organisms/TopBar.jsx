@@ -35,9 +35,10 @@ const TopBar = ({
   return (
     <header
       className={[
-        'h-14 bg-white border-b border-gray-100 flex items-center px-4 gap-3 flex-shrink-0 sticky top-0 z-20',
+        'h-14 border-b flex items-center px-4 gap-3 flex-shrink-0 sticky top-0 z-20 transition-colors duration-200',
         className,
       ].join(' ')}
+      style={{ backgroundColor: 'var(--topbar-bg)', borderColor: 'var(--border)' }}
     >
       {/* Search */}
       <div className="flex-1 relative max-w-md">
