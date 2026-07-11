@@ -26,7 +26,7 @@ public class MaintenanceController {
         if (currentUser.getRole() == null) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied.");
         }
-        return ResponseEntity.ok(maintenanceRequestRepository.findAll());
+        return ResponseEntity.ok(maintenanceRequestRepository.findAllByOrderByIdDesc());
     }
 
     @GetMapping("/{id}")

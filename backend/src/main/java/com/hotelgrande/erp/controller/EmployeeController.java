@@ -23,7 +23,7 @@ public class EmployeeController {
 
     @GetMapping
     public ResponseEntity<?> getAllEmployees(@AuthenticationPrincipal User currentUser) {
-        if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.MANAGER) {
+        if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.MANAGER && currentUser.getRole() != Role.RECEPTIONIST) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied.");
         }
         return ResponseEntity.ok(userRepository.findAll());
@@ -31,7 +31,7 @@ public class EmployeeController {
 
     @GetMapping("/{id}")
     public ResponseEntity<?> getEmployeeById(@PathVariable Long id, @AuthenticationPrincipal User currentUser) {
-        if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.MANAGER) {
+        if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.MANAGER && currentUser.getRole() != Role.RECEPTIONIST) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied.");
         }
         return userRepository.findById(id)

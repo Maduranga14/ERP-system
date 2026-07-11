@@ -16,8 +16,8 @@ import TopBar from '../organisms/TopBar';
  */
 const DashboardLayout = ({
   role = 'admin',
-  userName = '',
-  userRole = '',
+  userName: propUserName = '',
+  userRole: propUserRole = '',
   userAvatar,
   notificationCount = 0,
   searchPlaceholder,
@@ -26,7 +26,36 @@ const DashboardLayout = ({
 }) => {
   const navigate = useNavigate();
 
-  const handleLogout = () => navigate('/');
+  const handleLogout = () => {
+    localStorage.removeItem('jwtToken');
+    localStorage.removeItem('userInfo');
+    navigate('/');
+  };
+
+  // Load real user data if available in localStorage
+  let userName = propUserName;
+  let userRole = propUserRole;
+
+  try {
+    const savedUserInfo = localStorage.getItem('userInfo');
+    if (savedUserInfo) {
+      const userInfo = JSON.parse(savedUserInfo);
+      if (userInfo.fullName) {
+        userName = userInfo.fullName;
+      }
+      if (userInfo.role) {
+        const roleMapping = {
+          'ADMIN': 'Super Administrator',
+          'MANAGER': 'General Manager',
+          'RECEPTIONIST': 'Front Desk Lead',
+          'HOUSEKEEPER': 'Housekeeper'
+        };
+        userRole = roleMapping[userInfo.role] || userInfo.role;
+      }
+    }
+  } catch (e) {
+    console.error('Error loading user info from localStorage', e);
+  }
 
   return (
     <div className="flex h-screen bg-slate-100 overflow-hidden">
