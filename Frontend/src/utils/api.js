@@ -70,6 +70,7 @@ export const getReservations    = ()      => apiGet('/api/reservations');
 export const getReservationById = (id)    => apiGet(`/api/reservations/${id}`);
 export const createReservation  = (r)     => apiPost('/api/reservations', r);
 export const updateReservation  = (id, r) => apiPut(`/api/reservations/${id}`, r);
+export const cancelReservation  = (id)    => apiPost(`/api/reservations/${id}/cancel`, {});
 export const checkIn            = (id)    => apiPost(`/api/reservations/${id}/check-in`, {});
 export const checkOut           = (id)    => apiPost(`/api/reservations/${id}/check-out`, {});
 export const deleteReservation  = (id)    => apiDelete(`/api/reservations/${id}`);
@@ -98,9 +99,11 @@ export const updateEmployee  = (id, e) => apiPut(`/api/employees/${id}`, e);
 export const deleteEmployee  = (id)    => apiDelete(`/api/employees/${id}`);
 
 
-export const getMaintenanceRequests = ()       => apiGet('/api/maintenance');
-export const getMaintenanceById     = (id)     => apiGet(`/api/maintenance/${id}`);
-export const createMaintenance      = (m)      => apiPost('/api/maintenance', m);
-export const updateMaintenance      = (id, m)  => apiPut(`/api/maintenance/${id}`, m);
-export const updateMaintenanceStatus = (id, s) => apiPut(`/api/maintenance/${id}/status?status=${encodeURIComponent(s)}`, {});
-export const deleteMaintenance      = (id)     => apiDelete(`/api/maintenance/${id}`);
+export const getMaintenanceRequests          = ()       => apiGet('/api/maintenance');
+export const getAvailableMaintenanceRequests = ()       => apiGet('/api/maintenance?status=Open');
+export const getMaintenanceById              = (id)     => apiGet(`/api/maintenance/${id}`);
+export const createMaintenance               = (m)      => apiPost('/api/maintenance', m);
+export const updateMaintenance               = (id, m)  => apiPut(`/api/maintenance/${id}`, m);
+export const updateMaintenanceStatus         = (id, s)  => apiPut(`/api/maintenance/${id}/status?status=${encodeURIComponent(s)}`, {});
+export const deleteMaintenance               = (id)     => apiDelete(`/api/maintenance/${id}`);
+export const assignMaintenanceTask           = (payload) => apiPost('/api/maintenance/assign', payload);

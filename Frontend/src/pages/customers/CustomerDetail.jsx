@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Camera, Shield, BadgeCheck,
   Phone, Mail, MapPin, CreditCard, Globe, Calendar,
   BedDouble, Heart, FileText, Star, AlertTriangle,
-  CheckCircle2, ChevronRight, Download,
+  CheckCircle2, ChevronRight, Download, Loader2,
 } from 'lucide-react';
 
 import DashboardLayout  from '../../components/templates/DashboardLayout';
@@ -12,7 +12,7 @@ import Badge            from '../../components/atoms/Badge';
 import Avatar           from '../../components/atoms/Avatar';
 import { useRole }      from '../../hooks/useRole';
 import { canCustomer }  from '../../utils/permissions';
-import { CUSTOMERS }    from '../../data/customers';
+import { getCustomerById } from '../../utils/api';
 
 /* ── Helpers ───────────────────────────────────────────────── */
 const STATUS_VARIANT = { Active: 'green', Inactive: 'gray', New: 'amber' };
@@ -73,7 +73,45 @@ const CustomerDetail = () => {
   const role      = useRole();
   const basePath  = `/${role}`;
 
-  const customer = CUSTOMERS.find((c) => c.id === id) || CUSTOMERS[4]; // fallback to Julianne Moore
+  const [customer, setCustomer] = useState(null);
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState('');
+
+  useEffect(() => {
+    setLoading(true);
+    getCustomerById(id)
+      .then(data => setCustomer(data))
+      .catch(() => setError('Customer not found or failed to load.'))
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  if (loading) return (
+    <DashboardLayout role={role} userName={userNames[role]} userRole={userRoles[role]}>
+      <div className="flex items-center justify-center h-64 gap-3 text-gray-400">
+        <Loader2 className="w-6 h-6 animate-spin" /> Loading customer...
+      </div>
+    </DashboardLayout>
+  );
+
+  if (error || !customer) return (
+    <DashboardLayout role={role} userName={userNames[role]} userRole={userRoles[role]}>
+      <button
+        onClick={() => navigate(`${basePath}/customers`)}
+        className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-navy-800 transition-colors mb-4 font-medium"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to Customers
+      </button>
+      <div className="flex items-center justify-center h-64 text-red-500 text-sm">
+        {error || 'Customer not found.'}
+      </div>
+    </DashboardLayout>
+  );
+
+  const preferences  = customer.preferences  || [];
+  const vipNotes     = customer.vipNotes     || [];
+  const bookingHistory = customer.bookingHistory || [];
+  const invoices     = customer.invoices     || [];
 
   return (
     <DashboardLayout
@@ -94,7 +132,6 @@ const CustomerDetail = () => {
 
       {/* ── Profile Header Card ── */}
       <div className="card p-5 mb-4 relative overflow-hidden">
-        {/* subtle background gradient */}
         <div className="absolute top-0 right-0 w-64 h-32 bg-gradient-to-bl from-slate-100 to-transparent rounded-bl-3xl pointer-events-none" />
 
         <div className="flex items-start gap-5 relative">
@@ -160,10 +197,7 @@ const CustomerDetail = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
 
         {/* Personal Information */}
-        <SectionCard
-          title="Personal Information"
-          icon={<CreditCard className="w-4 h-4" />}
-        >
+        <SectionCard title="Personal Information" icon={<CreditCard className="w-4 h-4" />}>
           <div className="flex flex-col gap-3">
             <InfoRow label="Full Name" value={customer.name} />
             <div className="grid grid-cols-2 gap-3">
@@ -180,14 +214,10 @@ const CustomerDetail = () => {
         </SectionCard>
 
         {/* Stay Summary */}
-        <SectionCard
-          title="Stay Summary"
-          icon={<Calendar className="w-4 h-4" />}
-        >
-          {/* Total & Last Stay */}
+        <SectionCard title="Stay Summary" icon={<Calendar className="w-4 h-4" />}>
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div className="bg-slate-50 rounded-xl p-3 text-center">
-              <p className="text-3xl font-bold text-gray-900">{customer.totalStays}</p>
+              <p className="text-3xl font-bold text-gray-900">{customer.totalStays ?? 0}</p>
               <p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wide mt-0.5">Total Stays</p>
             </div>
             <div className="bg-slate-50 rounded-xl p-3 text-center">
@@ -197,7 +227,6 @@ const CustomerDetail = () => {
             </div>
           </div>
 
-          {/* Current Booking */}
           {customer.currentBooking ? (
             <div className="bg-navy-900 text-white rounded-xl p-3 mb-3">
               <div className="flex items-center justify-between mb-1">
@@ -213,24 +242,20 @@ const CustomerDetail = () => {
             </div>
           )}
 
-          {/* Preferred Room */}
           <div className="flex items-center justify-between border border-gray-100 rounded-xl p-3">
             <div>
               <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Preferred Room</p>
-              <p className="text-sm font-semibold text-gray-800 mt-0.5">{customer.preferredRoom}</p>
+              <p className="text-sm font-semibold text-gray-800 mt-0.5">{customer.preferredRoom || '—'}</p>
             </div>
-            <Heart className="w-5 h-5 text-gold-500 fill-gold-500" style={{ color: '#B8943F', fill: '#B8943F' }} />
+            <Heart className="w-5 h-5" style={{ color: '#B8943F', fill: '#B8943F' }} />
           </div>
         </SectionCard>
 
         {/* Preferences + VIP Notes */}
         <div className="flex flex-col gap-4">
-          <SectionCard
-            title="Preferences"
-            icon={<Star className="w-4 h-4" />}
-          >
+          <SectionCard title="Preferences" icon={<Star className="w-4 h-4" />}>
             <div className="flex flex-wrap gap-1.5">
-              {customer.preferences.map((pref) => (
+              {preferences.map((pref) => (
                 <span
                   key={pref}
                   className="inline-flex items-center gap-1 text-xs font-medium bg-slate-100 text-gray-700 px-2.5 py-1 rounded-lg"
@@ -239,20 +264,20 @@ const CustomerDetail = () => {
                   {pref}
                 </span>
               ))}
-              {customer.preferences.length === 0 && (
+              {preferences.length === 0 && (
                 <p className="text-xs text-gray-400">No preferences recorded.</p>
               )}
             </div>
           </SectionCard>
 
-          {customer.vipNotes.length > 0 && (
+          {vipNotes.length > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-3">
                 <AlertTriangle className="w-4 h-4 text-amber-600" />
                 <h3 className="text-sm font-bold text-amber-800">VIP Notes</h3>
               </div>
               <div className="flex flex-col gap-2">
-                {customer.vipNotes.map((note, i) => (
+                {vipNotes.map((note, i) => (
                   <VipNote key={i} type={note.type} text={note.text} />
                 ))}
               </div>
@@ -264,16 +289,11 @@ const CustomerDetail = () => {
       {/* ── Row 2: Booking History | Recent Invoices ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-        {/* Booking History — visible to Admin, Receptionist, Manager */}
         {canCustomer(role, 'viewBookingHistory') && (
           <SectionCard
             title="Booking History"
             icon={<Calendar className="w-4 h-4" />}
-            action={
-              <button className="text-xs font-medium text-gold-600 hover:underline">
-                View All
-              </button>
-            }
+            action={<button className="text-xs font-medium text-gold-600 hover:underline">View All</button>}
           >
             <table className="w-full">
               <thead>
@@ -286,37 +306,24 @@ const CustomerDetail = () => {
                 </tr>
               </thead>
               <tbody>
-                {customer.bookingHistory.map((b) => (
+                {bookingHistory.map((b) => (
                   <tr key={b.id} className="border-b border-gray-50 hover:bg-gray-50/60 transition-colors">
-                    <td className="py-2.5 pr-3">
-                      <span className="text-xs font-bold text-navy-900">{b.id}</span>
-                    </td>
-                    <td className="py-2.5 pr-3">
-                      <span className="text-xs text-gray-700">{b.room}</span>
-                    </td>
-                    <td className="py-2.5 pr-3">
-                      <span className="text-xs text-gray-500">{b.duration}</span>
-                    </td>
+                    <td className="py-2.5 pr-3"><span className="text-xs font-bold text-navy-900">{b.id}</span></td>
+                    <td className="py-2.5 pr-3"><span className="text-xs text-gray-700">{b.room}</span></td>
+                    <td className="py-2.5 pr-3"><span className="text-xs text-gray-500">{b.duration}</span></td>
                     <td className="py-2.5">
-                      <Badge variant={BOOKING_STATUS_VARIANT[b.status] || 'gray'} size="sm">
-                        {b.status}
-                      </Badge>
+                      <Badge variant={BOOKING_STATUS_VARIANT[b.status] || 'gray'} size="sm">{b.status}</Badge>
                     </td>
                   </tr>
                 ))}
-                {customer.bookingHistory.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="py-6 text-center text-xs text-gray-400">
-                      No booking history.
-                    </td>
-                  </tr>
+                {bookingHistory.length === 0 && (
+                  <tr><td colSpan={4} className="py-6 text-center text-xs text-gray-400">No booking history.</td></tr>
                 )}
               </tbody>
             </table>
           </SectionCard>
         )}
 
-        {/* Recent Invoices — Admin & Manager only */}
         {canCustomer(role, 'viewPaymentHistory') && (
           <SectionCard
             title="Recent Invoices"
@@ -339,37 +346,24 @@ const CustomerDetail = () => {
                 </tr>
               </thead>
               <tbody>
-                {customer.invoices.map((inv) => (
+                {invoices.map((inv) => (
                   <tr key={inv.id} className="border-b border-gray-50 hover:bg-gray-50/60 transition-colors">
+                    <td className="py-2.5 pr-3"><span className="text-xs font-bold text-navy-900">{inv.id}</span></td>
+                    <td className="py-2.5 pr-3"><span className="text-sm font-bold text-gray-800">{inv.amount}</span></td>
                     <td className="py-2.5 pr-3">
-                      <span className="text-xs font-bold text-navy-900">{inv.id}</span>
+                      <Badge variant={INVOICE_STATUS_VARIANT[inv.status] || 'gray'} size="sm">{inv.status}</Badge>
                     </td>
-                    <td className="py-2.5 pr-3">
-                      <span className="text-sm font-bold text-gray-800">{inv.amount}</span>
-                    </td>
-                    <td className="py-2.5 pr-3">
-                      <Badge variant={INVOICE_STATUS_VARIANT[inv.status] || 'gray'} size="sm">
-                        {inv.status}
-                      </Badge>
-                    </td>
-                    <td className="py-2.5">
-                      <span className="text-xs text-gray-500">{inv.date}</span>
-                    </td>
+                    <td className="py-2.5"><span className="text-xs text-gray-500">{inv.date}</span></td>
                   </tr>
                 ))}
-                {customer.invoices.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="py-6 text-center text-xs text-gray-400">
-                      No invoices found.
-                    </td>
-                  </tr>
+                {invoices.length === 0 && (
+                  <tr><td colSpan={4} className="py-6 text-center text-xs text-gray-400">No invoices found.</td></tr>
                 )}
               </tbody>
             </table>
           </SectionCard>
         )}
 
-        {/* Receptionist: show a limited payment notice instead of full invoice table */}
         {role === 'receptionist' && (
           <div className="card p-5 flex flex-col items-center justify-center text-center gap-2 bg-slate-50 border-dashed">
             <FileText className="w-8 h-8 text-gray-300" />

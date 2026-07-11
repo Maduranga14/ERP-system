@@ -164,6 +164,8 @@ const InvoiceDetail = () => {
     fetchInvoice();
   }, [id]);
 
+  const handlePrint = () => {}; // replaced by /print route
+
   const handleSavePayment = async (form) => {
     setSubmitting(true);
     setPaymentSaved(false);
@@ -230,7 +232,7 @@ const InvoiceDetail = () => {
         <div className="flex flex-wrap gap-2">
           {canBilling(role, 'printInvoice') && (
             <button
-              onClick={() => window.print()}
+              onClick={() => navigate(`${basePath}/billing/${id}/print`)}
               className="flex items-center gap-2 px-4 py-2 text-sm font-semibold border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
             >
               <Printer className="w-4 h-4" />
@@ -271,7 +273,7 @@ const InvoiceDetail = () => {
       )}
 
       {/* ── Invoice Card ── */}
-      <div className="card p-6 mb-4">
+      <div id="invoice-printable" className="card p-6 mb-4">
         {/* Invoice Header */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6 pb-6 border-b border-gray-100">
           {/* Hotel branding */}

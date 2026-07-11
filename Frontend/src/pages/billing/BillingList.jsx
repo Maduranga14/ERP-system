@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Plus, Eye, Printer, Search, Calendar, ChevronLeft, ChevronRight,
+  Plus, Eye, Search, Calendar, ChevronLeft, ChevronRight,
   Download, DollarSign, FileText, CheckCircle, Clock, CreditCard, RotateCcw,
   SlidersHorizontal, Loader2,
 } from 'lucide-react';
@@ -325,15 +325,7 @@ const BillingList = () => {
                     >
                       <Eye className="w-4 h-4" />
                     </button>
-                    {canBilling(role, 'printInvoice') && (
-                      <button
-                        onClick={() => window.print()}
-                        className="text-gray-400 hover:text-navy-700 transition-colors"
-                        title="Print Invoice"
-                      >
-                        <Printer className="w-4 h-4" />
-                      </button>
-                    )}
+
                   </div>
                 </td>
               </tr>
