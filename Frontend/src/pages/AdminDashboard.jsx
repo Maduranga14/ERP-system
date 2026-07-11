@@ -45,8 +45,16 @@ const columns = [
 ];
 
 /* ─── Component ─────────────────────────────────────────── */
+const getLoggedInUser = () => {
+  try {
+    const info = JSON.parse(localStorage.getItem('userInfo') || '{}');
+    return info.fullName || 'Admin';
+  } catch { return 'Admin'; }
+};
+
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const loggedInName = getLoggedInUser();
 
   const [rooms, setRooms] = useState([]);
   const [reservations, setReservations] = useState([]);
@@ -175,7 +183,7 @@ const AdminDashboard = () => {
   ];
 
   if (loading) return (
-    <DashboardLayout role="admin" userName="Admin User" userRole="Super Administrator">
+    <DashboardLayout role="admin" userName={loggedInName} userRole="Super Administrator">
       <div className="flex items-center justify-center h-64 gap-3 text-gray-400">
         <Loader2 className="w-6 h-6 animate-spin" /> Loading administrator metrics...
       </div>
@@ -185,11 +193,17 @@ const AdminDashboard = () => {
   return (
     <DashboardLayout
       role="admin"
-      userName="Admin User"
+      userName={loggedInName}
       userRole="Super Administrator"
       notificationCount={3}
       searchPlaceholder="Search guests, rooms, invoices..."
     >
+      {/* Greeting */}
+      <div className="mb-5">
+        <h1 className="text-2xl font-bold text-gray-900">Welcome back, {loggedInName} 👋</h1>
+        <p className="text-sm text-gray-400 mt-0.5">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+      </div>
+
       {/* Stat row */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mb-5">
         <StatCard label="Total Rooms"      value={stats.total} sublabel="Operational" borderColor="navy"  icon={<BedDouble className="w-5 h-5 text-navy-700" />}  iconBg="bg-navy-100" />

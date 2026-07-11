@@ -58,7 +58,7 @@ const DashboardLayout = ({
   }
 
   return (
-    <div className="flex h-screen bg-slate-100 overflow-hidden">
+    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--bg-page)' }}>
       <Sidebar
         role={role}
         onLogout={handleLogout}
@@ -73,7 +73,7 @@ const DashboardLayout = ({
           notificationCount={notificationCount}
           actions={topBarActions}
         />
-        <main className="flex-1 overflow-y-auto p-5">
+        <main className="flex-1 overflow-y-auto p-5" style={{ backgroundColor: 'var(--bg-page)' }}>
           {children}
         </main>
       </div>

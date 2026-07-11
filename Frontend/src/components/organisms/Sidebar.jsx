@@ -49,7 +49,6 @@ const navConfigs = {
     { label: 'Check Out',        icon: <LogOut className="w-4 h-4" />,           path: '/receptionist/check-out' },
     { label: 'Billing',          icon: <Receipt className="w-4 h-4" />,          path: '/receptionist/billing' },
     { label: 'Room Availability',icon: <BedDouble className="w-4 h-4" />,        path: '/receptionist/rooms' },
-    { label: 'Profile',          icon: <UserCog className="w-4 h-4" />,          path: '/receptionist/profile' },
   ],
   housekeeper: [
     { label: 'Dashboard',           icon: <LayoutDashboard className="w-4 h-4" />, path: '/housekeeper' },
@@ -57,7 +56,6 @@ const navConfigs = {
     { label: 'Room Status',         icon: <BedDouble className="w-4 h-4" />,         path: '/housekeeper/rooms' },
     { label: 'Maintenance Requests',icon: <Wrench className="w-4 h-4" />,            path: '/housekeeper/maintenance' },
     { label: 'Cleaning History',    icon: <History className="w-4 h-4" />,           path: '/housekeeper/history' },
-    { label: 'Profile',             icon: <UserCog className="w-4 h-4" />,           path: '/housekeeper/profile' },
   ],
 };
 

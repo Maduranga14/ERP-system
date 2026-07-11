@@ -1,5 +1,6 @@
 import React from 'react';
 import { Bell, Settings, Search } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Avatar from '../atoms/Avatar';
 import IconButton from '../atoms/IconButton';
 
@@ -21,12 +22,23 @@ const TopBar = ({
   actions,
   className = '',
 }) => {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+
+  // Derive settings path from current role prefix
+  const rolePrefix = pathname.startsWith('/manager')      ? '/manager'
+                   : pathname.startsWith('/receptionist') ? '/receptionist'
+                   : pathname.startsWith('/housekeeper')  ? '/housekeeper'
+                   : '/admin';
+
+  const goToSettings = () => navigate(`${rolePrefix}/settings`);
   return (
     <header
       className={[
-        'h-14 bg-white border-b border-gray-100 flex items-center px-4 gap-3 flex-shrink-0 sticky top-0 z-20',
+        'h-14 border-b flex items-center px-4 gap-3 flex-shrink-0 sticky top-0 z-20 transition-colors duration-200',
         className,
       ].join(' ')}
+      style={{ backgroundColor: 'var(--topbar-bg)', borderColor: 'var(--border)' }}
     >
       {/* Search */}
       <div className="flex-1 relative max-w-md">
@@ -49,7 +61,7 @@ const TopBar = ({
       </IconButton>
 
       {/* Settings */}
-      <IconButton variant="ghost" aria-label="Settings">
+      <IconButton variant="ghost" aria-label="Settings" onClick={goToSettings}>
         <Settings className="w-5 h-5" />
       </IconButton>
 
@@ -57,7 +69,7 @@ const TopBar = ({
       <div className="w-px h-6 bg-gray-200" />
 
       {/* User profile */}
-      <div className="flex items-center gap-2.5 cursor-pointer group">
+      <div className="flex items-center gap-2.5 cursor-pointer group" onClick={goToSettings}>
         <div className="text-right hidden sm:block">
           <p className="text-xs font-semibold text-gray-800 leading-tight">{userName}</p>
           <p className="text-[11px] text-gray-400 leading-tight">{userRole}</p>

@@ -33,6 +33,9 @@ const columns = [
 
 const ManagerDashboard = () => {
   const navigate = useNavigate();
+  const loggedInName = (() => {
+    try { return JSON.parse(localStorage.getItem('userInfo') || '{}').fullName || 'Manager'; } catch { return 'Manager'; }
+  })();
 
   const [rooms, setRooms] = useState([]);
   const [reservations, setReservations] = useState([]);
@@ -138,7 +141,7 @@ const ManagerDashboard = () => {
   ];
 
   if (loading) return (
-    <DashboardLayout role="manager" userName="Alex Sterling" userRole="General Manager">
+    <DashboardLayout role="manager" userName={loggedInName} userRole="General Manager">
       <div className="flex items-center justify-center h-64 gap-3 text-gray-400">
         <Loader2 className="w-6 h-6 animate-spin" /> Loading manager metrics...
       </div>
@@ -148,7 +151,7 @@ const ManagerDashboard = () => {
   return (
     <DashboardLayout
       role="manager"
-      userName="Alex Sterling"
+      userName={loggedInName}
       userRole="General Manager"
       notificationCount={5}
       searchPlaceholder="Search reservations, rooms..."
@@ -161,7 +164,7 @@ const ManagerDashboard = () => {
     >
       {/* Greeting */}
       <div className="mb-5">
-        <h1 className="text-2xl font-bold text-gray-900">Welcome back, Hotel Manager 👋</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Welcome back, {loggedInName} 👋</h1>
         <p className="text-sm text-gray-400 mt-0.5">{todayFormatted}</p>
       </div>
 
